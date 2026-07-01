@@ -1,0 +1,9 @@
+# Derived/regenerable from a real game install — see README for extraction steps
+extracted/
+recovered/
+
+# Copyrighted game binaries — copy from your own Steam install, don't commit
+game_files/
+
+# Local Claude Code settings (personal, not shared)
+.claude/settings.local.json
