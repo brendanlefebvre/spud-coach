@@ -27,3 +27,64 @@ def find_weapon_dirs(extracted_root: str) -> list[dict]:
                 "data_path": data[0],
             })
     return results
+
+
+def _title(folder: str) -> str:
+    return folder.replace("_", " ").title()
+
+
+def find_item_dirs(extracted_root: str) -> list[dict]:
+    results = []
+    for d in sorted(glob.glob(os.path.join(extracted_root, "items", "all", "*"))):
+        if not os.path.isdir(d):
+            continue
+        folder = os.path.basename(d)
+        data = os.path.join(d, f"{folder}_data.tres")
+        if not os.path.isfile(data):
+            continue
+        effects = sorted(glob.glob(os.path.join(d, f"{folder}_effect_*.tres")))
+        results.append({
+            "item_id": f"item_{folder}", "name": _title(folder),
+            "data_path": data, "effect_paths": effects,
+        })
+    return results
+
+
+def find_character_dirs(extracted_root: str) -> list[dict]:
+    results = []
+    for d in sorted(glob.glob(os.path.join(extracted_root, "items", "characters", "*"))):
+        if not os.path.isdir(d):
+            continue
+        folder = os.path.basename(d)
+        data = os.path.join(d, f"{folder}_data.tres")
+        if not os.path.isfile(data):
+            continue
+        effects = sorted(glob.glob(os.path.join(d, f"{folder}_effect_*.tres")))
+        results.append({
+            "char_id": f"character_{folder}", "name": _title(folder),
+            "data_path": data, "effect_paths": effects,
+        })
+    return results
+
+
+def find_set_dirs(extracted_root: str) -> list[dict]:
+    results = []
+    for d in sorted(glob.glob(os.path.join(extracted_root, "items", "sets", "*"))):
+        if not os.path.isdir(d):
+            continue
+        folder = os.path.basename(d)
+        set_data = os.path.join(d, f"{folder}_set_data.tres")
+        if not os.path.isfile(set_data):
+            continue
+        count_effects = {}
+        for sub in sorted(glob.glob(os.path.join(d, "*"))):
+            b = os.path.basename(sub)
+            if os.path.isdir(sub) and b.isdigit():
+                eff = glob.glob(os.path.join(sub, f"set_{b}_effect_1.tres"))
+                if eff:
+                    count_effects[int(b)] = eff[0]
+        results.append({
+            "set_id": f"set_{folder}", "name": _title(folder),
+            "set_data_path": set_data, "count_effect_paths": count_effects,
+        })
+    return results

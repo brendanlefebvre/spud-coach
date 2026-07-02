@@ -15,6 +15,10 @@ import sys
 from brotato_coach import dataset
 from brotato_coach.builders import discover
 from brotato_coach.builders.weapons import build_weapon_record
+from brotato_coach.builders.items import build_item_record
+from brotato_coach.builders.characters import build_character_record
+from brotato_coach.builders.sets import build_set_record
+from brotato_coach.tres import parse_tres
 
 
 def _read(path: str) -> str:
@@ -37,13 +41,32 @@ def main(argv=None) -> int:
             weapon_id=entry["weapon_id"], name=entry["name"], tier=entry["tier"],
         ))
 
-    # Items/characters/sets discovery wiring follows the same shape as weapons;
-    # they are assembled here once their discovery helpers land. For the first
-    # buildable dataset, weapons alone produce a valid, useful artifact.
+    items = []
+    for e in discover.find_item_dirs(args.extracted):
+        items.append(build_item_record(
+            _read(e["data_path"]), [_read(p) for p in e["effect_paths"]],
+            item_id=e["item_id"], name=e["name"]))
+
+    characters = []
+    for e in discover.find_character_dirs(args.extracted):
+        data_text = _read(e["data_path"])
+        res = parse_tres(data_text).resource
+        characters.append(build_character_record(
+            data_text, [_read(p) for p in e["effect_paths"]],
+            char_id=e["char_id"], name=e["name"],
+            wanted_tags=res.get("wanted_tags", []) or [],
+            banned_item_groups=res.get("banned_item_groups", []) or []))
+
+    sets = []
+    for e in discover.find_set_dirs(args.extracted):
+        sets.append(build_set_record(
+            _read(e["set_data_path"]),
+            {c: _read(p) for c, p in e["count_effect_paths"].items()},
+            set_id=e["set_id"], name=e["name"]))
+
     ds = dataset.assemble_dataset(
         game_version=args.game_version, generated_at=args.generated_at,
-        weapons=weapons, items=[], characters=[], sets=[],
-    )
+        weapons=weapons, items=items, characters=characters, sets=sets)
 
     problems = dataset.validate_dataset(ds)
     if problems:
@@ -55,7 +78,8 @@ def main(argv=None) -> int:
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(ds, fh, indent=2)
-    print(f"Wrote {args.out}: {len(weapons)} weapon records")
+    print(f"Wrote {args.out}: {len(weapons)} weapon records, {len(items)} item records, "
+          f"{len(characters)} character records, {len(sets)} set records")
     return 0
 
 
