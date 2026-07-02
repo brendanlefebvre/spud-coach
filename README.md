@@ -87,9 +87,10 @@ All tools return a JSON object. Lookups that miss return `{"error": "not_found",
 | `get_weapon` | `name`, `tier?` | Weapon record incl. precomputed DPS line; `{matches:[...]}` if `tier` omitted and several tiers match |
 | `get_item` | `name` | Item record: effects, tags, `archetype`, `frozen_stat` |
 | `get_character` | `name` | Character kit: `wanted_tags`, `banned_item_groups`, `flat_bonuses`, `gain_modifiers`, `special_effects` |
-| `get_set` | `class_name` | Weapon-class set bonuses, by equipped count |
+| `get_weapon_class_set` | `class_name` | Weapon-**class** set bonuses (Blade, Gun, Elemental, …), by equipped count |
 | `list_weapons` | `scaling_stat?`, `tier?` | `{weapons:[...]}` filtered summaries |
 | `list_items` | `tag?`, `scaling_stat?`, `archetype?`, `tier?` | `{items:[...]}` filtered summaries |
+| `get_filter_options` | — | Valid filter values in the dataset: item tags, archetypes, scaling stats, tiers, and weapon-class names |
 | `weapon_dps` | `name`, `tier`, `stats` | Realized DPS at the given stats, with breakdown |
 | `compare_weapons` | `names_with_tiers`, `stats` | `{ranking:[...]}` sorted by DPS descending |
 | `compare_merge_paths` | `weapon_name`, `path_a`, `path_b` | Winner or crossover RD for two merge paths (lists of tiers) |
@@ -100,6 +101,7 @@ All tools return a JSON object. Lookups that miss return `{"error": "not_found",
 
 `stats` / `current_stats` are objects keyed by short stat name (e.g. `{"ranged_damage": 7, "max_hp": 65}`).
 `names_with_tiers` is a list of `[name, tier]` pairs. `path_a` / `path_b` are lists of tier numbers.
+Note the two stat-name forms: `stats` / `current_stats` use the **short** name (`ranged_damage`), while the `stat` argument of `explain_stat` and `stat_display_value` uses the **`stat_`-prefixed** form (`stat_ranged_damage`). `get_filter_options` returns the valid filter values so you don't have to guess (all filters are case-sensitive exact matches).
 
 ## Building the dataset
 

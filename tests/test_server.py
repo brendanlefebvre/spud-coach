@@ -42,3 +42,41 @@ def test_weapon_dps_tool():
     result = asyncio.run(_call(server, "weapon_dps", name="Minigun", tier=4,
                                stats={"ranged_damage": 10}))
     assert round(result["dps"]) == round(55.5556 + 8.3333 * 10)
+
+
+def _tool_list(server):
+    async def _tools():
+        return await server.list_tools()
+    return asyncio.run(_tools())
+
+
+def test_all_tools_have_descriptions():
+    # A blank description is the main reason a model picks the wrong tool.
+    missing = [t.name for t in _tool_list(build_server(DS)) if not (t.description or "").strip()]
+    assert missing == []
+
+
+def test_get_set_renamed_to_weapon_class_set():
+    names = {t.name for t in _tool_list(build_server(DS))}
+    assert "get_weapon_class_set" in names
+    assert "get_set" not in names
+
+
+def test_get_filter_options_tool():
+    ds = {**DS,
+          "weapons": [{"id": "w", "name": "W", "tier": 4,
+                       "scaling_stats": [["ranged_damage", 1.0]]}],
+          "items": [{"id": "i", "name": "I", "tier": 2, "tags": ["ranged"],
+                     "archetype": ["dmg"], "scaling_stats": ["luck"]}],
+          "sets": [{"id": "set_blade", "name": "Blade"}]}
+    result = asyncio.run(_call(build_server(ds), "get_filter_options"))
+    assert result["item_tags"] == ["ranged"]
+    assert result["weapon_classes"] == ["Blade"]
+    assert result["weapon_scaling_stats"] == ["ranged_damage"]
+
+
+def test_typed_stats_param_accepts_plain_dict():
+    # `stats` is a typed model now; a plain dict from the client must still coerce.
+    result = asyncio.run(_call(build_server(DS), "compare_weapons",
+                               names_with_tiers=[["Minigun", 4]], stats={"ranged_damage": 10}))
+    assert result["ranking"][0]["name"] == "Minigun"
