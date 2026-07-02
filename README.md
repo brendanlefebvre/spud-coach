@@ -40,7 +40,7 @@ The server refuses to start without `data/brotato.json` and tells you to build i
 Run the tests (the dataset-dependent integration test is skipped when no dataset is built):
 
 ```bash
-uv run pytest        # 49 tests (48 passed + 1 skipped without a built dataset)
+uv run pytest        # 53 tests (52 passed + 1 skipped without a built dataset)
 ```
 
 ## Use as a Claude Code plugin
@@ -126,10 +126,10 @@ the regenerated dataset.
 extracted/  (gitignored, regenerable)          raw .tres game data
      │
      ▼   build_dataset.py   (offline, per patch)
-data/brotato.json  (committed, enriched)        the deterministic core artifact
+data/brotato.json  (gitignored, built locally)  the deterministic core artifact
      │
      ▼   loaded at startup
-brotato_coach.server (FastMCP)                  13 tools over the pure functions
+brotato_coach.server (FastMCP)                  14 tools over the pure functions
      │
      ▼   connected as a plugin
 Claude Code / Desktop / Web                     chat frontend
