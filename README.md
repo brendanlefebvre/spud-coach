@@ -143,3 +143,23 @@ Claude Code / Desktop / Web                     chat frontend
 
 Reference material on the game mechanics the coach encodes lives in [`docs/`](docs/)
 (extraction setup, weapon-merge DPS methodology, run post-mortem methodology, stat mechanics).
+
+## Disclaimer
+
+This is an unofficial, fan-made tool. It is **not affiliated with, endorsed by, or sponsored by
+Blobfish**, the developer of Brotato, or any of its partners. *Brotato* and all related names,
+marks, and assets are the property of their respective owners.
+
+This project ships **no game assets and no game data**. The stat dataset it operates on is
+generated locally, by you, from a copy of the game you already own (`build_dataset.py` reads an
+extraction of your own install). Nothing derived from the game's copyrighted files is distributed
+in this repository.
+
+The software is provided "as is", without warranty of any kind (see [LICENSE](LICENSE)). Its
+recommendations are computed from datamined values and may be incomplete or wrong; use your own
+judgment.
+
+## License
+
+[MIT](LICENSE) © 2026 Brendan LeFebvre. This license covers the code and documentation in this
+repository only — it does not grant any rights to Brotato or its assets.
