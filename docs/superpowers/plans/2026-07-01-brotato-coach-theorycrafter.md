@@ -483,11 +483,11 @@ git commit -m "feat: minimal Godot .tres parser"
 
 ---
 
-### Task 4: Weapon record builder (`build/weapons.py`)
+### Task 4: Weapon record builder (`builders/weapons.py`)
 
 **Files:**
-- Create: `brotato_coach/build/__init__.py`
-- Create: `brotato_coach/build/weapons.py`
+- Create: `brotato_coach/builders/__init__.py`
+- Create: `brotato_coach/builders/weapons.py`
 - Test: `tests/test_build_weapons.py`
 
 **Interfaces:**
@@ -501,7 +501,7 @@ git commit -m "feat: minimal Godot .tres parser"
 ```python
 import math
 
-from brotato_coach.build.weapons import build_weapon_record
+from brotato_coach.builders.weapons import build_weapon_record
 
 STATS = """[gd_resource type="Resource" format=2]
 [resource]
@@ -549,11 +549,11 @@ def test_weapon_record_precomputed_dps_line():
 Run: `uv run pytest tests/test_build_weapons.py -v`
 Expected: FAIL (cannot import `build_weapon_record`).
 
-- [ ] **Step 3: Implement `build/weapons.py`**
+- [ ] **Step 3: Implement `builders/weapons.py`**
 
-`brotato_coach/build/__init__.py`: (empty file)
+`brotato_coach/builders/__init__.py`: (empty file)
 
-`brotato_coach/build/weapons.py`:
+`brotato_coach/builders/weapons.py`:
 ```python
 from __future__ import annotations
 
@@ -618,16 +618,16 @@ Expected: PASS (2 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add brotato_coach/build/ tests/test_build_weapons.py
+git add brotato_coach/builders/ tests/test_build_weapons.py
 git commit -m "feat: weapon record builder with precomputed DPS line"
 ```
 
 ---
 
-### Task 5: Item record builder + archetype detection (`build/items.py`)
+### Task 5: Item record builder + archetype detection (`builders/items.py`)
 
 **Files:**
-- Create: `brotato_coach/build/items.py`
+- Create: `brotato_coach/builders/items.py`
 - Test: `tests/test_build_items.py`
 
 **Interfaces:**
@@ -639,7 +639,7 @@ git commit -m "feat: weapon record builder with precomputed DPS line"
 
 `tests/test_build_items.py`:
 ```python
-from brotato_coach.build.items import build_item_record
+from brotato_coach.builders.items import build_item_record
 
 HANDCUFFS_DATA = """[gd_resource type="Resource" format=2]
 [resource]
@@ -674,9 +674,9 @@ def test_item_cap_archetype_detected():
 Run: `uv run pytest tests/test_build_items.py -v`
 Expected: FAIL (cannot import `build_item_record`).
 
-- [ ] **Step 3: Implement `build/items.py`**
+- [ ] **Step 3: Implement `builders/items.py`**
 
-`brotato_coach/build/items.py`:
+`brotato_coach/builders/items.py`:
 ```python
 from __future__ import annotations
 
@@ -747,17 +747,17 @@ Expected: PASS (2 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add brotato_coach/build/items.py tests/test_build_items.py
+git add brotato_coach/builders/items.py tests/test_build_items.py
 git commit -m "feat: item record builder with cap-at-current-value archetype detection"
 ```
 
 ---
 
-### Task 6: Character + set builders (`build/characters.py`, `build/sets.py`)
+### Task 6: Character + set builders (`builders/characters.py`, `builders/sets.py`)
 
 **Files:**
-- Create: `brotato_coach/build/characters.py`
-- Create: `brotato_coach/build/sets.py`
+- Create: `brotato_coach/builders/characters.py`
+- Create: `brotato_coach/builders/sets.py`
 - Test: `tests/test_build_characters.py`
 
 **Interfaces:**
@@ -773,8 +773,8 @@ git commit -m "feat: item record builder with cap-at-current-value archetype det
 
 `tests/test_build_characters.py`:
 ```python
-from brotato_coach.build.characters import build_character_record
-from brotato_coach.build.sets import build_set_record
+from brotato_coach.builders.characters import build_character_record
+from brotato_coach.builders.sets import build_set_record
 
 RANGER_DATA = """[gd_resource type="Resource" format=2]
 [resource]
@@ -816,7 +816,7 @@ Expected: FAIL (cannot import builders).
 
 - [ ] **Step 3: Implement the builders**
 
-`brotato_coach/build/characters.py`:
+`brotato_coach/builders/characters.py`:
 ```python
 from __future__ import annotations
 
@@ -856,7 +856,7 @@ def build_character_record(data_text: str, effect_texts: list[str], *, char_id: 
     }
 ```
 
-`brotato_coach/build/sets.py`:
+`brotato_coach/builders/sets.py`:
 ```python
 from __future__ import annotations
 
@@ -883,23 +883,23 @@ Expected: PASS (2 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add brotato_coach/build/characters.py brotato_coach/build/sets.py tests/test_build_characters.py
+git add brotato_coach/builders/characters.py brotato_coach/builders/sets.py tests/test_build_characters.py
 git commit -m "feat: character (gain modifiers) and set-bonus builders"
 ```
 
 ---
 
-### Task 7: Stat-mechanics table + dataset assembly (`build/mechanics.py`, `dataset.py`)
+### Task 7: Stat-mechanics table + dataset assembly (`builders/mechanics.py`, `dataset.py`)
 
 **Files:**
-- Create: `brotato_coach/build/mechanics.py`
+- Create: `brotato_coach/builders/mechanics.py`
 - Create: `brotato_coach/dataset.py`
 - Test: `tests/test_dataset.py`
 
 **Interfaces:**
 - Consumes: nothing new (pure data + validation).
 - Produces:
-  - `build/mechanics.py`: `STAT_MECHANICS: dict[str, dict]` — one entry per verified stat with keys `cap` (`{"cap_key": str}` | None), `special` (str | None), `safe_below_zero` (bool), `safe_at_zero` (bool), `avoid_positive` (bool), `never_dead_weight` (bool).
+  - `builders/mechanics.py`: `STAT_MECHANICS: dict[str, dict]` — one entry per verified stat with keys `cap` (`{"cap_key": str}` | None), `special` (str | None), `safe_below_zero` (bool), `safe_at_zero` (bool), `avoid_positive` (bool), `never_dead_weight` (bool).
   - `dataset.py`:
     - `DATASET_VERSION = 1` (schema version, distinct from game version).
     - `assemble_dataset(*, game_version, generated_at, weapons, items, characters, sets) -> dict` → `{schema_version, game_version, generated_at, stat_mechanics, weapons, items, characters, sets}`.
@@ -913,7 +913,7 @@ git commit -m "feat: character (gain modifiers) and set-bonus builders"
 import pytest
 
 from brotato_coach import dataset
-from brotato_coach.build.mechanics import STAT_MECHANICS
+from brotato_coach.builders.mechanics import STAT_MECHANICS
 
 
 def test_mechanics_known_facts():
@@ -960,7 +960,7 @@ Expected: FAIL (cannot import `dataset` / `STAT_MECHANICS`).
 
 - [ ] **Step 3: Implement the mechanics table and dataset module**
 
-`brotato_coach/build/mechanics.py`:
+`brotato_coach/builders/mechanics.py`:
 ```python
 """Verified stat mechanics, encoded from decompiled code (see docs/stat-mechanics.md).
 
@@ -1002,7 +1002,7 @@ from __future__ import annotations
 
 import json
 
-from brotato_coach.build.mechanics import STAT_MECHANICS
+from brotato_coach.builders.mechanics import STAT_MECHANICS
 
 DATASET_VERSION = 1
 
@@ -1063,7 +1063,7 @@ Expected: PASS (4 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add brotato_coach/build/mechanics.py brotato_coach/dataset.py tests/test_dataset.py
+git add brotato_coach/builders/mechanics.py brotato_coach/dataset.py tests/test_dataset.py
 git commit -m "feat: stat-mechanics table + dataset assembly and validation"
 ```
 
@@ -1585,11 +1585,11 @@ git commit -m "feat: flagship build-fit evaluator (live/wasted/harmful)"
 
 **Files:**
 - Create: `build_dataset.py`
-- Create: `brotato_coach/build/discover.py`
+- Create: `brotato_coach/builders/discover.py`
 - Test: `tests/test_build_discover.py`
 
 **Interfaces:**
-- Consumes: all `build/*` builders (Tasks 4-6), `dataset.assemble_dataset`/`validate_dataset` (Task 7).
+- Consumes: all `builders/*` builders (Tasks 4-6), `dataset.assemble_dataset`/`validate_dataset` (Task 7).
 - Produces:
   - `discover.find_weapon_dirs(extracted_root) -> list[dict]` → for each weapon tier dir found under `weapons/{melee,ranged}/<w>/<tier>/`, a dict `{weapon_id, name, tier, stats_path, data_path}`. (Name resolution: title-cased from the weapon folder name; the coach can refine display names later — folder name is the stable key.)
   - `build_dataset.py` CLI: `python build_dataset.py --extracted extracted --out data/brotato.json --game-version <v> --generated-at <iso8601>` → parses, assembles, validates, writes JSON (exit 1 and print problems if validation fails).
@@ -1599,7 +1599,7 @@ git commit -m "feat: flagship build-fit evaluator (live/wasted/harmful)"
 
 `tests/test_build_discover.py`:
 ```python
-from brotato_coach.build.discover import find_weapon_dirs
+from brotato_coach.builders.discover import find_weapon_dirs
 
 
 def test_find_weapon_dirs(tmp_path):
@@ -1624,7 +1624,7 @@ Expected: FAIL (cannot import `find_weapon_dirs`).
 
 - [ ] **Step 3: Implement discovery and the CLI**
 
-`brotato_coach/build/discover.py`:
+`brotato_coach/builders/discover.py`:
 ```python
 from __future__ import annotations
 
@@ -1673,8 +1673,8 @@ import json
 import sys
 
 from brotato_coach import dataset
-from brotato_coach.build import discover
-from brotato_coach.build.weapons import build_weapon_record
+from brotato_coach.builders import discover
+from brotato_coach.builders.weapons import build_weapon_record
 
 
 def _read(path: str) -> str:
@@ -1741,7 +1741,7 @@ Expected: writes `data/brotato.json` with a non-zero weapon count.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add brotato_coach/build/discover.py build_dataset.py tests/test_build_discover.py data/brotato.json
+git add brotato_coach/builders/discover.py build_dataset.py tests/test_build_discover.py data/brotato.json
 git commit -m "feat: dataset build CLI + weapon discovery (first buildable dataset)"
 ```
 

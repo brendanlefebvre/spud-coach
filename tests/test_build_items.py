@@ -1,4 +1,4 @@
-from brotato_coach.build.items import build_item_record
+from brotato_coach.builders.items import build_item_record
 
 HANDCUFFS_DATA = """[gd_resource type="Resource" format=2]
 [resource]

@@ -1,6 +1,6 @@
 import math
 
-from brotato_coach.build.weapons import build_weapon_record
+from brotato_coach.builders.weapons import build_weapon_record
 
 STATS = """[gd_resource type="Resource" format=2]
 [resource]

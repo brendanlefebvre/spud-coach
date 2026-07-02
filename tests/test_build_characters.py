@@ -1,5 +1,5 @@
-from brotato_coach.build.characters import build_character_record
-from brotato_coach.build.sets import build_set_record
+from brotato_coach.builders.characters import build_character_record
+from brotato_coach.builders.sets import build_set_record
 
 RANGER_DATA = """[gd_resource type="Resource" format=2]
 [resource]
