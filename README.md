@@ -8,8 +8,10 @@ data, DPS formulas, stat mechanics — so the language model *looks facts up and
 of recalling (and misremembering) them. Every tool returns a finished, verifiable answer or a
 structured error; there are no baked-in tier lists or opinions, only facts and math.
 
-The shipped dataset (`data/brotato.json`) is built from **Brotato 1.1.15.4** and contains
-**202 weapons, 197 items, 50 characters, and 15 weapon-class sets**.
+The dataset (`data/brotato.json`) is **not committed** — it is derived from copyrighted game
+files, so you build it yourself from a local Brotato install (see [Building the dataset](#building-the-dataset)).
+A full build from **Brotato 1.1.15.4** contains **202 weapons, 197 items, 50 characters, and 15
+weapon-class sets**.
 
 ## Requirements
 
@@ -24,16 +26,21 @@ uv sync
 
 ## Quick start
 
-The dataset is committed, so the server works out of the box:
+Build the dataset (needs a local extraction — see [Building the dataset](#building-the-dataset)),
+then start the server:
 
 ```bash
-uv run python -m brotato_coach.server   # starts the MCP server over stdio
+uv run python build_dataset.py --game-version 1.1.15.4 \
+    --generated-at $(date -u +%Y-%m-%dT%H:%M:%SZ)     # writes data/brotato.json
+uv run python -m brotato_coach.server                 # starts the MCP server over stdio
 ```
 
-Run the tests:
+The server refuses to start without `data/brotato.json` and tells you to build it first.
+
+Run the tests (the dataset-dependent integration test is skipped when no dataset is built):
 
 ```bash
-uv run pytest        # 49 tests
+uv run pytest        # 49 tests (48 passed + 1 skipped without a built dataset)
 ```
 
 ## Use as a Claude Code plugin
@@ -52,9 +59,10 @@ The MCP server is described by [`plugin/.mcp.json`](plugin/.mcp.json):
 }
 ```
 
-The server reads `data/brotato.json` relative to its working directory, so **it must run with the
-repository root as its `cwd`** (the manifest handles this via `${CLAUDE_PLUGIN_ROOT}` when bundled
-as a plugin).
+The server reads the (locally built) `data/brotato.json` relative to its working directory, so
+**it must run with the repository root as its `cwd`** (the manifest handles this via
+`${CLAUDE_PLUGIN_ROOT}` when bundled as a plugin), and you must
+[build the dataset](#building-the-dataset) first.
 
 To register it directly in Claude Code without packaging, add the server pointed at your checkout,
 e.g.:
@@ -93,11 +101,12 @@ All tools return a JSON object. Lookups that miss return `{"error": "not_found",
 `stats` / `current_stats` are objects keyed by short stat name (e.g. `{"ranged_damage": 7, "max_hp": 65}`).
 `names_with_tiers` is a list of `[name, tier]` pairs. `path_a` / `path_b` are lists of tier numbers.
 
-## Rebuilding the dataset (after a Brotato patch)
+## Building the dataset
 
-The dataset is regenerated from an extraction of a real game install. The raw `extracted/` and the
-copyrighted `game_files/` are **not** committed (see [`docs/extraction-setup.md`](docs/extraction-setup.md)
-for how they are produced). Once `extracted/` is present at the repo root:
+The dataset is **not committed** — it is built from an extraction of a real game install. The raw
+`extracted/`, the decompiled `recovered/`, the copyrighted `game_files/`, and the derived
+`data/brotato.json` are all gitignored (see [`docs/extraction-setup.md`](docs/extraction-setup.md)
+for how the extraction is produced). Once `extracted/` is present at the repo root:
 
 ```bash
 uv run python build_dataset.py \

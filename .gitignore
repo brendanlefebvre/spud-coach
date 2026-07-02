@@ -16,3 +16,7 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+
+# Derived game-stat dataset — not redistributed; regenerate with build_dataset.py
+# from your own Brotato install (see README).
+data/brotato.json
