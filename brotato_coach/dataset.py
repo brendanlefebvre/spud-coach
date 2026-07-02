@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import json
+
+from brotato_coach.builders.mechanics import STAT_MECHANICS
+
+DATASET_VERSION = 1
+
+_REQUIRED_WEAPON_KEYS = ("id", "name", "tier", "dps_slope_per_rd", "dps_at_zero_rd")
+
+
+def assemble_dataset(*, game_version: str, generated_at: str, weapons: list,
+                     items: list, characters: list, sets: list) -> dict:
+    return {
+        "schema_version": DATASET_VERSION,
+        "game_version": game_version,
+        "generated_at": generated_at,
+        "stat_mechanics": STAT_MECHANICS,
+        "weapons": weapons,
+        "items": items,
+        "characters": characters,
+        "sets": sets,
+    }
+
+
+def validate_dataset(dataset: dict) -> list[str]:
+    problems: list[str] = []
+    for key in ("schema_version", "game_version", "weapons", "items", "characters", "sets"):
+        if key not in dataset:
+            problems.append(f"missing top-level key: {key}")
+
+    for w in dataset.get("weapons", []):
+        wid = w.get("id", "<unknown>")
+        for k in _REQUIRED_WEAPON_KEYS:
+            if k not in w:
+                problems.append(f"weapon {wid} missing key: {k}")
+        tier = w.get("tier")
+        if not isinstance(tier, int) or not (1 <= tier <= 4):
+            problems.append(f"weapon {wid} has invalid tier: {tier}")
+
+    for it in dataset.get("items", []):
+        if not isinstance(it.get("effects"), list):
+            problems.append(f"item {it.get('id', '<unknown>')} missing effects list")
+
+    return problems
+
+
+def load_dataset(path: str) -> dict:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"dataset not found at {path}; run build_dataset.py first"
+        ) from exc
