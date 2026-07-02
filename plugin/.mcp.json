@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "brotato-coach": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "brotato_coach.server"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  }
+}
