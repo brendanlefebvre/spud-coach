@@ -30,3 +30,7 @@ def test_shipped_dataset_is_complete():
     verdicts = {e["effect"]["key"]: e["verdict"] for e in result["effects"]}
     assert verdicts["stat_ranged_damage"] == "live"
     assert verdicts["hp_cap"] == "harmful"
+
+    # proc weapons carry a nonzero expected proc line
+    sh = query.get_weapon(ds, "Shredder", tier=1)
+    assert sh["proc_dps_at_zero_rd"] > 0
