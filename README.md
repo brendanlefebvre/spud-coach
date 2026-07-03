@@ -117,8 +117,8 @@ uv run python build_dataset.py \
 ```
 
 This writes `data/brotato.json`. Supply the actual installed Brotato version to `--game-version`
-(it is not recorded inside the `.pck`; check the Steam client). Re-run after each patch and commit
-the regenerated dataset.
+(it is not recorded inside the `.pck`; check the Steam client). Re-run after each patch to refresh
+your local copy — it stays gitignored, so don't commit it.
 
 ## How it works
 
