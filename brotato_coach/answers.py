@@ -10,27 +10,37 @@ def _weapon_at(ds: dict, name: str, tier: int) -> dict | None:
     return rec if "id" in rec else None
 
 
-def weapon_dps(ds: dict, name: str, tier: int, stats: dict) -> dict:
+def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
+               aoe_enemies_hit: float = 1.0) -> dict:
     rec = query.get_weapon(ds, name, tier=tier)
     if "id" not in rec:
         return rec
     rd = float(stats.get("ranged_damage", 0))
-    dps = calc.dps_at(rec["dps_at_zero_rd"], rec["dps_slope_per_rd"], rd)
+    base = calc.dps_at(rec["dps_at_zero_rd"], rec["dps_slope_per_rd"], rd)
+    proc = aoe_enemies_hit * calc.dps_at(rec.get("proc_dps_at_zero_rd", 0.0),
+                                         rec.get("proc_dps_slope_per_rd", 0.0), rd)
     return {
-        "name": rec["name"], "tier": tier, "ranged_damage": rd, "dps": dps,
+        "name": rec["name"], "tier": tier, "ranged_damage": rd,
+        "dps": base + proc, "base_dps": base, "proc_dps": proc,
+        "unmodeled_effects": rec.get("unmodeled_effects", []),
         "breakdown": {
             "dps_at_zero_rd": rec["dps_at_zero_rd"],
             "dps_slope_per_rd": rec["dps_slope_per_rd"],
+            "proc_dps_at_zero_rd": rec.get("proc_dps_at_zero_rd", 0.0),
+            "proc_dps_slope_per_rd": rec.get("proc_dps_slope_per_rd", 0.0),
+            "aoe_enemies_hit": aoe_enemies_hit,
         },
     }
 
 
-def compare_weapons(ds: dict, names_with_tiers: list, stats: dict) -> dict:
+def compare_weapons(ds: dict, names_with_tiers: list, stats: dict,
+                    aoe_enemies_hit: float = 1.0) -> dict:
     rows = []
     for name, tier in names_with_tiers:
-        r = weapon_dps(ds, name, tier, stats)
+        r = weapon_dps(ds, name, tier, stats, aoe_enemies_hit)
         if "dps" in r:
-            rows.append({"name": r["name"], "tier": tier, "dps": r["dps"]})
+            rows.append({"name": r["name"], "tier": tier, "dps": r["dps"],
+                         "proc_dps": r["proc_dps"]})
     rows.sort(key=lambda x: x["dps"], reverse=True)
     return {"ranking": rows}
 
@@ -43,7 +53,8 @@ def compare_merge_paths(ds: dict, weapon_name: str, path_a: list, path_b: list,
             rec = _weapon_at(ds, weapon_name, t)
             if rec is None:
                 return None
-            lines.append((rec["dps_at_zero_rd"], rec["dps_slope_per_rd"]))
+            lines.append((rec["dps_at_zero_rd"] + rec.get("proc_dps_at_zero_rd", 0.0),
+                          rec["dps_slope_per_rd"] + rec.get("proc_dps_slope_per_rd", 0.0)))
         return calc.sum_lines(lines)
 
     line_a, line_b = path_line(path_a), path_line(path_b)
