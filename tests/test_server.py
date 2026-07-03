@@ -80,3 +80,13 @@ def test_typed_stats_param_accepts_plain_dict():
     result = asyncio.run(_call(build_server(DS), "compare_weapons",
                                names_with_tiers=[["Minigun", 4]], stats={"ranged_damage": 10}))
     assert result["ranking"][0]["name"] == "Minigun"
+
+
+def test_weapon_dps_tool_reports_proc_fields():
+    ds = {**DS, "weapons": [{**DS["weapons"][0],
+          "proc_dps_at_zero_rd": 5.0, "proc_dps_slope_per_rd": 0.5,
+          "unmodeled_effects": ["effect_burning"]}]}
+    result = asyncio.run(_call(build_server(ds), "weapon_dps", name="Minigun",
+                               tier=4, stats={"ranged_damage": 10}))
+    assert round(result["proc_dps"], 4) == 10.0
+    assert result["unmodeled_effects"] == ["effect_burning"]
