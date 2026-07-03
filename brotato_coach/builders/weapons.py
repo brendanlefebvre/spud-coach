@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from brotato_coach import calc
+from brotato_coach.builders.localization import resolve_text
 from brotato_coach.builders.procs import PROC_MODELS
 from brotato_coach.tres import parse_tres
 
@@ -28,8 +29,10 @@ def build_weapon_record(stats_text: str, data_text: str,
                         effect_texts: list[str] | None = None, *,
                         weapon_id: str, name: str, tier: int,
                         classes: list[str] | None = None,
-                        proc_models: dict | None = None) -> dict:
+                        proc_models: dict | None = None,
+                        tr: dict[str, str] | None = None) -> dict:
     s = parse_tres(stats_text).resource
+    d = parse_tres(data_text).resource
 
     cooldown = float(s.get("cooldown", 0))
     recoil_duration = float(s.get("recoil_duration", 0.0))
@@ -64,6 +67,8 @@ def build_weapon_record(stats_text: str, data_text: str,
     return {
         "id": weapon_id,
         "name": name,
+        "display_name": resolve_text(tr, d.get("name"), name),
+        "description": resolve_text(tr, d.get("description")),
         "tier": tier,
         "base_damage": base_damage,
         "cooldown": cooldown,

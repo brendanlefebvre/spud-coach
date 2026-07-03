@@ -130,3 +130,28 @@ def test_weapon_record_no_effects_has_zero_proc_fields():
     rec = build_weapon_record(STATS, DATA, weapon_id="w", name="W", tier=4)
     assert rec["proc_dps_at_zero_rd"] == 0.0
     assert rec["unmodeled_effects"] == []
+
+
+DATA_LOC = """[gd_resource type="Resource" format=2]
+[resource]
+weapon_id = "weapon_shredder"
+name = "WEAPON_SHREDDER"
+description = "WEAPON_SHREDDER_DESC"
+effects = [  ]
+"""
+TR = {"WEAPON_SHREDDER": "Shredder (EN)",
+      "WEAPON_SHREDDER_DESC": "Chance to explode."}
+
+
+def test_weapon_record_resolves_display_name_and_description():
+    rec = build_weapon_record(STATS, DATA_LOC, weapon_id="weapon_shredder",
+                              name="Shredder", tier=4, tr=TR)
+    assert rec["display_name"] == "Shredder (EN)"
+    assert rec["description"] == "Chance to explode."
+
+
+def test_weapon_record_falls_back_to_slug_name_without_translations():
+    rec = build_weapon_record(STATS, DATA_LOC, weapon_id="weapon_shredder",
+                              name="Shredder", tier=4)
+    assert rec["display_name"] == "Shredder"
+    assert rec["description"] == ""
