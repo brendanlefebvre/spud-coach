@@ -104,3 +104,20 @@ def test_loadout_set_bonuses_tool():
     assert result["classes"][0]["class"] == "Gun"
     assert result["classes"][0]["count"] == 2
     assert result["classes"][0]["active"][0]["effect"]["value"] == 10
+
+
+def test_data_path_default():
+    from brotato_coach import server
+    assert server._data_path([]) == "data/brotato.json"
+
+
+def test_data_path_flag_overrides():
+    from brotato_coach import server
+    assert server._data_path(["--data", "/x/y.json"]) == "/x/y.json"
+
+
+def test_data_path_env_fallback(monkeypatch):
+    from brotato_coach import server
+    monkeypatch.setenv("SPUDCOACH_DATA", "/env/brotato.json")
+    assert server._data_path([]) == "/env/brotato.json"
+    assert server._data_path(["--data", "/flag.json"]) == "/flag.json"

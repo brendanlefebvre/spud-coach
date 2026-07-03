@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import os
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -219,8 +221,17 @@ def build_server(ds: dict) -> FastMCP:
     return mcp
 
 
+def _data_path(argv: list[str] | None = None) -> str:
+    parser = argparse.ArgumentParser(prog="spudcoach")
+    parser.add_argument(
+        "--data", default=os.environ.get("SPUDCOACH_DATA", "data/brotato.json"),
+        help="path to brotato.json built by build_dataset.py "
+             "(also settable via SPUDCOACH_DATA)")
+    return parser.parse_args(argv).data
+
+
 def main() -> None:
-    ds = dataset.load_dataset("data/brotato.json")
+    ds = dataset.load_dataset(_data_path())
     build_server(ds).run()
 
 
