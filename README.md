@@ -89,6 +89,42 @@ Once connected, just ask in natural language — the model routes your question 
 - *"Is attack speed ever dead weight? Can I let knockback go negative on a gun build?"*
 - *"What does the Ranger's ranged-damage bonus do to a raw stat of 6?"*
 
+## Use with Claude Desktop
+
+Claude Desktop can launch the server directly with [`uvx`](https://docs.astral.sh/uv/), which fetches
+and caches the package straight from this repo — no manual clone. You still supply your own locally
+built `brotato.json` (the dataset is never distributed).
+
+1. Install `uv` on the machine running Claude Desktop (`winget install astral-sh.uv` on Windows,
+   or the [standalone installer](https://docs.astral.sh/uv/getting-started/installation/)).
+2. Open the config file and add the `spud-coach` server:
+   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+   ```json
+   {
+     "mcpServers": {
+       "spud-coach": {
+         "command": "uvx",
+         "args": [
+           "--from", "git+https://github.com/BrendanL79/spud-coach",
+           "spudcoach",
+           "--data", "C:\\Users\\<you>\\path\\to\\brotato.json"
+         ]
+       }
+     }
+   }
+   ```
+
+   Point `--data` at your built dataset (`SPUDCOACH_DATA` works as an env-var alternative). On macOS
+   use a POSIX path like `/Users/<you>/brotato.json`.
+3. Fully restart Claude Desktop.
+
+**Windows PATH note:** Claude Desktop launches MCP servers with a restricted `PATH`, so a bare
+`"command": "uvx"` may not resolve. If the server fails to start, use the absolute path instead —
+typically `"command": "C:\\Users\\<you>\\.local\\bin\\uvx.exe"` (run `where uvx` in a terminal to
+confirm the location).
+
 ## Available tools
 
 All tools return a JSON object. Lookups that miss return `{"error": "not_found", "did_you_mean": [...]}`.
