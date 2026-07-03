@@ -90,3 +90,32 @@ def stat_display_value(ds: dict, character: str, stat: str, raw_value: float) ->
     displayed = int(displayed) if float(displayed).is_integer() else displayed
     return {"stat": stat, "raw_value": raw_value, "displayed_value": displayed,
             "modifier_pct": modifier_pct}
+
+
+def loadout_set_bonuses(ds: dict, weapon_names: list[str]) -> dict:
+    counts: dict[str, int] = {}
+    unknown: list[dict] = []
+    for name in weapon_names:
+        rec = query.get_weapon(ds, name)
+        if "matches" in rec:
+            rec = rec["matches"][0]  # class membership is tier-independent
+        if "id" not in rec:
+            unknown.append({"name": name,
+                            "did_you_mean": rec.get("did_you_mean", [])})
+            continue
+        for cls in rec.get("sets", []):
+            counts[cls] = counts.get(cls, 0) + 1  # duplicates count in-game
+
+    classes = []
+    for cls in sorted(counts):
+        n = counts[cls]
+        set_rec = query.get_set(ds, cls)
+        bonuses = set_rec.get("bonuses", []) if "id" in set_rec else []
+        active = [b for b in bonuses if b["count"] <= n]
+        upcoming = [b for b in bonuses if b["count"] > n]
+        nxt = None
+        if upcoming:
+            first = min(upcoming, key=lambda b: b["count"])
+            nxt = {**first, "needs": first["count"] - n}
+        classes.append({"class": cls, "count": n, "active": active, "next": nxt})
+    return {"classes": classes, "unknown_weapons": unknown}

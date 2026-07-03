@@ -93,3 +93,52 @@ def test_compare_merge_paths_includes_proc_lines():
     # path_b = T3 (45, 2.7) + T1 (15+3, 0.9+0.1) = (63.0, 3.7)
     assert math.isclose(result["line_b"][0], 63.0)
     assert math.isclose(result["line_b"][1], 3.7)
+
+
+SETS_DS = {
+    "weapons": [
+        {"id": "weapon_smg", "name": "SMG", "tier": 1, "sets": ["Gun"]},
+        {"id": "weapon_pistol", "name": "Pistol", "tier": 2, "sets": ["Gun", "Precise"]},
+        {"id": "weapon_knife", "name": "Knife", "tier": 1, "sets": ["Blade", "Precise"]},
+    ],
+    "sets": [
+        {"id": "set_gun", "name": "Gun", "bonuses": [
+            {"count": 2, "effect": {"key": "stat_range", "value": 10}},
+            {"count": 4, "effect": {"key": "stat_range", "value": 20}}]},
+        {"id": "set_precise", "name": "Precise", "bonuses": [
+            {"count": 2, "effect": {"key": "stat_crit_chance", "value": 5}}]},
+        {"id": "set_blade", "name": "Blade", "bonuses": [
+            {"count": 2, "effect": {"key": "stat_lifesteal", "value": 2}}]},
+    ],
+}
+
+
+def test_loadout_set_bonuses_counts_duplicates_and_reports_next():
+    result = answers.loadout_set_bonuses(SETS_DS, ["SMG", "SMG", "Pistol", "Knife"])
+    by_class = {c["class"]: c for c in result["classes"]}
+    gun = by_class["Gun"]  # SMG x2 + Pistol = 3
+    assert gun["count"] == 3
+    assert gun["active"] == [{"count": 2, "effect": {"key": "stat_range", "value": 10}}]
+    assert gun["next"]["count"] == 4 and gun["next"]["needs"] == 1
+
+
+def test_loadout_set_bonuses_maxed_class_has_no_next():
+    result = answers.loadout_set_bonuses(SETS_DS, ["Pistol", "Knife"])
+    by_class = {c["class"]: c for c in result["classes"]}
+    assert by_class["Precise"]["count"] == 2
+    assert by_class["Precise"]["next"] is None
+    assert len(by_class["Precise"]["active"]) == 1
+
+
+def test_loadout_set_bonuses_below_first_threshold():
+    result = answers.loadout_set_bonuses(SETS_DS, ["Knife"])
+    by_class = {c["class"]: c for c in result["classes"]}
+    assert by_class["Blade"]["active"] == []
+    assert by_class["Blade"]["next"]["needs"] == 1
+
+
+def test_loadout_set_bonuses_unknown_weapon_suggested():
+    result = answers.loadout_set_bonuses(SETS_DS, ["Knifee"])
+    assert result["classes"] == []
+    assert result["unknown_weapons"][0]["name"] == "Knifee"
+    assert "Knife" in result["unknown_weapons"][0]["did_you_mean"]
