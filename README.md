@@ -202,10 +202,20 @@ The dataset is **not committed** — it is built from an extraction of a real ga
 `data/brotato.json` are all gitignored (see [`docs/extraction-setup.md`](docs/extraction-setup.md)
 for how the extraction is produced). Once `extracted/` is present at the repo root:
 
+macOS / Linux (bash):
+
 ```bash
 uv run python build_dataset.py \
     --game-version 1.1.15.4 \
     --generated-at $(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+Windows (PowerShell):
+
+```powershell
+uv run python build_dataset.py `
+    --game-version 1.1.15.4 `
+    --generated-at (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 ```
 
 This writes `data/brotato.json`. Supply the actual installed Brotato version to `--game-version`
