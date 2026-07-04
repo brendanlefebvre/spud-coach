@@ -88,6 +88,7 @@ Once connected, just ask in natural language — the model routes your question 
 - *"Minigun T4 vs Revolver T4 at 20 ranged damage — which hits harder?"*
 - *"Is attack speed ever dead weight? Can I let knockback go negative on a gun build?"*
 - *"What does the Ranger's ranged-damage bonus do to a raw stat of 6?"*
+- *"Here's my run.json — how's this build doing?"* (post-mortem a whole save at once)
 
 ## Use with Claude Desktop
 
@@ -185,11 +186,14 @@ All tools return a JSON object. Lookups that miss return `{"error": "not_found",
 | `explain_stat` | `stat` | Verified stat mechanics: caps, special behavior, neglectable / never-negative flags |
 | `stat_display_value` | `character`, `stat`, `raw_value` | Displayed value after the character's gain modifiers (e.g. Ranger RD 6 → 9) |
 | `evaluate_item_for_build` | `item_name`, `character_name`, `current_stats` | Per-effect verdict — **live / wasted / harmful** — with reasons, plus a summary |
+| `evaluate_run` | `path?` **or** `run_json?` | One-call post-mortem of a whole Brotato `run.json` save: run context (character, wave, danger), realized stats, weapon-DPS ranking, set progress, and per-item verdicts |
 | `check_dataset_version` | — | `game_version`, `generated_at`, `schema_version` |
 
 `stats` / `current_stats` are objects keyed by short stat name (e.g. `{"ranged_damage": 7, "max_hp": 65}`).
 `names_with_tiers` is a list of `[name, tier]` pairs. `path_a` / `path_b` are lists of tier numbers.
 Note the two stat-name forms: `stats` / `current_stats` use the **short** name (`ranged_damage`), while the `stat` argument of `explain_stat` and `stat_display_value` uses the **`stat_`-prefixed** form (`stat_ranged_damage`). `get_filter_options` returns the valid filter values so you don't have to guess (all filters are case-sensitive exact matches).
+
+`evaluate_run` takes exactly one input: pass the save's contents as `run_json` (e.g. an uploaded/pasted `run.json`) **or** its location as `path` (e.g. a file in your Brotato save directory). The save is read-only — it is never modified. Ids the loaded dataset doesn't recognize (e.g. content newer than your build) are listed under `notes` rather than dropped; a malformed save returns `{"error": "bad_run_file", ...}`.
 
 ## Building the dataset
 
@@ -217,7 +221,7 @@ extracted/  (gitignored, regenerable)          raw .tres game data
 data/brotato.json  (gitignored, built locally)  the deterministic core artifact
      │
      ▼   loaded at startup
-brotato_coach.server (FastMCP)                  15 tools over the pure functions
+brotato_coach.server (FastMCP)                  16 tools over the pure functions
      │
      ▼   connected as a plugin
 Claude Code / Desktop / Web                     chat frontend
@@ -229,6 +233,8 @@ Claude Code / Desktop / Web                     chat frontend
   `stat_mechanics` table).
 - `brotato_coach/calc.py` — pure DPS / merge math (no I/O), unit-tested against hand-verified values.
 - `brotato_coach/{query,answers,evaluate}.py` — pure functions that produce finished answers.
+- `brotato_coach/runfile.py` — pure parser that normalizes a Brotato `run.json` save into a build
+  (character, weapons, items, realized stats) for `evaluate_run`; the only I/O is reading the save file.
 - `brotato_coach/server.py` — thin FastMCP wrappers over those functions.
 
 Reference material on the game mechanics the coach encodes lives in [`docs/`](docs/)
