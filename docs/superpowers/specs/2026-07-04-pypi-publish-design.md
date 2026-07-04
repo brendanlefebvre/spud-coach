@@ -33,8 +33,9 @@ common community pattern.
 
 ## Version
 
-Bump `pyproject.toml` from `0.2.0` to `1.0.0` for the first public release —
-this is the project's public debut, treated as the 1.0 milestone.
+Bump `pyproject.toml` from `0.2.0` to `0.9.0` for the first public release —
+leaves room to shake out release-process or packaging issues before
+committing to the `1.0.0` milestone.
 
 ## Workflow: `.github/workflows/publish.yml`
 
@@ -61,5 +62,5 @@ Triggers on `release: published`. Steps:
 ## Testing
 
 No new application tests. Verification is: cut a real GitHub Release
-(`v1.0.0`) and confirm the workflow run is green and the package appears on
+(`v0.9.0`) and confirm the workflow run is green and the package appears on
 PyPI, then confirm `uvx spudcoach --help` works from a clean environment.
