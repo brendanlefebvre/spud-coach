@@ -246,8 +246,13 @@ def build_server(ds: dict) -> FastMCP:
         try:
             # A client (or FastMCP) may deliver run_json already parsed to an
             # object; only hit load_run's JSON/file path when it hasn't been.
-            raw = run_json if isinstance(run_json, dict) else runfile.load_run(
-                path=path, run_json=run_json)
+            if isinstance(run_json, dict):
+                if path is not None:
+                    raise runfile.RunFormatError(
+                        "provide exactly one of `path` or `run_json`")
+                raw = run_json
+            else:
+                raw = runfile.load_run(path=path, run_json=run_json)
         except runfile.RunFormatError as exc:
             return {"error": "bad_run_file", "detail": str(exc)}
         return _safe(answers.evaluate_run)(ds=ds, run=raw)

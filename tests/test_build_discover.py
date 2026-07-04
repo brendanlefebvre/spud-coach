@@ -27,6 +27,18 @@ def test_find_item_dirs(tmp_path):
     empty = tmp_path / "items" / "all" / "not_an_item"
     empty.mkdir(parents=True)
     (empty / "not_an_item.png.import").write_text("x")
+    # a dir whose only .tres references a different script is also skipped —
+    # exercises the fallback loop rejecting a non-item_data.gd resource. Named
+    # "unrelated.tres" (not "unrelated_data.tres") so it misses the standard-
+    # name fast path and actually reaches the script check.
+    unrelated = tmp_path / "items" / "all" / "unrelated"
+    unrelated.mkdir(parents=True)
+    (unrelated / "unrelated.tres").write_text(
+        '[gd_resource type="Resource" load_steps=2 format=2]\n\n'
+        '[ext_resource path="res://items/global/some_other.gd" type="Script" id=1]\n\n'
+        '[resource]\n'
+        'script = ExtResource( 1 )\n'
+    )
     found = find_item_dirs(str(tmp_path))
     assert len(found) == 1
     e = found[0]

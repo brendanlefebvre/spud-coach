@@ -109,7 +109,9 @@ def load_run(*, path: str | None = None, run_json: str | None = None) -> dict:
         try:
             with open(path, encoding="utf-8") as fh:
                 run_json = fh.read()
-        except OSError as exc:
+        except (OSError, UnicodeDecodeError) as exc:
+            # UnicodeDecodeError is a ValueError, not an OSError; catch it too
+            # so a non-UTF-8 file still surfaces as the structured error.
             raise RunFormatError(f"could not read run file: {exc}") from exc
     try:
         return json.loads(run_json)

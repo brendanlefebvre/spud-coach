@@ -129,3 +129,12 @@ def test_load_run_rejects_invalid_json():
 def test_load_run_missing_file_raises(tmp_path):
     with pytest.raises(RunFormatError):
         load_run(path=str(tmp_path / "nope.json"))
+
+
+def test_load_run_non_utf8_file_raises_run_format_error(tmp_path):
+    # A non-UTF-8 file raises UnicodeDecodeError (a ValueError, not OSError);
+    # it must still surface as the structured RunFormatError, not escape.
+    f = tmp_path / "run.json"
+    f.write_bytes(b"\xff\xfe\x00 not valid utf-8")
+    with pytest.raises(RunFormatError):
+        load_run(path=str(f))

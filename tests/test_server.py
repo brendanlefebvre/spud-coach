@@ -162,6 +162,14 @@ def test_evaluate_run_tool_bad_file_is_structured_error():
     assert "detail" in result
 
 
+def test_evaluate_run_tool_rejects_both_path_and_dict():
+    # The dict run_json branch must still enforce "exactly one of path/run_json".
+    result = asyncio.run(_call(build_server(_RUN_DS), "evaluate_run",
+                               path="x", run_json={"current_run_state": {}}))
+    assert result["error"] == "bad_run_file"
+    assert "exactly one" in result["detail"]
+
+
 def test_data_path_default():
     from brotato_coach import server
     assert server._data_path([]) == "data/brotato.json"
