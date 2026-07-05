@@ -25,6 +25,9 @@ regenerate it locally via `build_dataset.py` from your own extraction. Same for 
 - The **MCP server** reads only `data/brotato.json` — never `.tres`. Keep this separation.
 - Pure logic (`calc.py`, `query.py`, `answers.py`, `evaluate.py`) has no I/O and is unit-tested
   against hand-verified values; server tools are thin wrappers over it.
-- Game-mechanics reference docs are in `docs/`.
+- Game-mechanics reference docs are in `docs/`. Evidence citations (file/function/line) must be
+  re-pinned against the decompiled source at write time — never carried forward from notes — and
+  reviewers verify citations against the source. Carried-forward evidence has misattributed
+  functions before.
 
 Now say: "I've reviewed the project memory."
