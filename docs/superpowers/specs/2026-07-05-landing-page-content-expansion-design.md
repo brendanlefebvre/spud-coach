@@ -1,4 +1,4 @@
-# Landing page content expansion (Connect-to-Claude + tool list)
+# Landing page content expansion (dataset build + Connect-to-Claude + tool list)
 
 ## Goal
 
@@ -6,8 +6,9 @@ The original landing page spec (`2026-07-05-landing-page-design.md`) deliberatel
 page down to a focused install page: hero, "What it is," "Install," links, footer disclaimer —
 explicitly excluding "feature-highlight sections beyond 'What it is'." This doc reverses that
 scope decision: bring over most of what's on the [PyPI project page](https://pypi.org/project/spudcoach/),
-specifically the parts PyPI visitors would want that the current page doesn't have — how to wire
-the server into Claude, and what it can actually do once connected.
+specifically the parts PyPI visitors would want that the current page doesn't have — how to
+build the dataset the tool needs, how to wire the server into Claude, and what it can actually
+do once connected.
 
 Out of scope (deliberately not ported): dataset stats (202 weapons/197 items/50 characters/15
 sets), the prose features list, and architecture internals (`tres.py`/`builders/`/`calc.py`
@@ -16,11 +17,33 @@ to install, then get them connected."
 
 ## New sections
 
-Two new `<section class="section">` blocks are added to `site/index.html`, inserted **after**
-the existing "Install" section and **before** the footer. Both reuse existing CSS classes
+Three new `<section class="section">` blocks are added to `site/index.html`, inserted **after**
+the existing "Install" section and **before** the footer. All reuse existing CSS classes
 (`.section`, `.install-code`, `.caveat`) — no new colors/fonts.
 
-### Section 3: "Connect it to Claude"
+### Section 3: "Build your dataset"
+
+A short explainer plus the `build_dataset.py` command, expanding on the one-line caveat already
+in the Install section above it (that caveat is unchanged — see Out of scope). Sourced from
+`README.md`'s "Building the dataset" section (lines 200-225).
+
+The page shows the **PowerShell** form (most Brotato players are on Windows) and links out to
+the README for the Bash/macOS/Linux equivalent, rather than showing both inline.
+
+```html
+<h2>Build your dataset</h2>
+<p>The game's data files are copyrighted, so nothing pre-built ships with Spud Coach — you generate <code>data/brotato.json</code> yourself, once, from your own Brotato install.</p>
+<pre class="install-code"><code>uv run python build_dataset.py `
+    --game-version &lt;your-installed-version&gt; `
+    --generated-at (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")</code></pre>
+<p class="caveat">Needs a local extraction first — see <a href="https://github.com/BrendanL79/spud-coach/blob/main/docs/extraction-setup.md">extraction-setup.md</a>. Re-run after each game patch (check your installed version in the Steam client — it isn't recorded in the game files). On macOS/Linux, see the <a href="https://github.com/BrendanL79/spud-coach#building-the-dataset">README</a> for the Bash form.</p>
+```
+
+The `--game-version` value is a placeholder (`<your-installed-version>`), not a hardcoded
+version string — the README's own example hardcodes `1.1.15.4`, but that goes stale as Brotato
+patches; a public landing page command shouldn't imply a fixed version is always correct.
+
+### Section 4: "Connect it to Claude"
 
 Two sub-parts under one `<h2>`, each with its own `<h3>` (new element on this page — style per
 CSS section below).
@@ -52,7 +75,7 @@ page's own `uvx spudcoach` framing from the Install section above it. The README
 scoped to the specific troubleshooting anchor, not the general README, since that's the one
 piece of Desktop-specific friction worth flagging here.
 
-### Section 4: "What you get"
+### Section 5: "What you get"
 
 One `<h2>What you get</h2>`, sub-headed by four `<h3>` category labels, each followed by a
 `<ul>` of tool one-liners. Tool names in `<code>`. Content sourced from `brotato_coach/server.py`
@@ -143,6 +166,8 @@ Hero (unchanged)
 main
   Section: What it is (unchanged)
   Section: Install (unchanged)
+  Section: Build your dataset (NEW)
+    p explainer + code block (PowerShell) + caveat
   Section: Connect it to Claude (NEW)
     h3 Claude Code + code block
     h3 Claude Desktop + code block + caveat
@@ -159,7 +184,7 @@ Footer disclaimer (unchanged)
 
 Same approach as the original landing page build — no application logic, so verification is
 structural + visual:
-- `grep -c` checks that each new tool name and the two code snippets appear in `index.html`
+- `grep -c` checks that each new tool name and each new code snippet appear in `index.html`
   exactly as specified (catches paraphrasing/drift, same pattern as the original plan's Step 4)
 - Open `site/index.html` directly in a browser to visually confirm the new sections render
   correctly and don't break the existing layout/responsiveness (768px/480px breakpoints)
@@ -167,7 +192,7 @@ structural + visual:
 ## Out of scope
 
 - Dataset stats, prose features list, architecture internals (see Goal section)
-- Anchor/jump navigation for the now-longer page — four sections is still short enough for a
+- Anchor/jump navigation for the now-longer page — five sections is still short enough for a
   single scroll
 - Any change to the existing Hero, "What it is," "Install," or footer content/copy
 - Any change to `netlify.toml`, deployment, or DNS (unaffected by a content-only change)
