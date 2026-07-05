@@ -3,6 +3,7 @@ from __future__ import annotations
 from brotato_coach import calc
 from brotato_coach.builders.localization import resolve_text
 from brotato_coach.builders.procs import PROC_MODELS
+from brotato_coach.builders.classifications import classify_effect
 from brotato_coach.tres import parse_tres
 
 
@@ -74,6 +75,7 @@ def build_weapon_record(stats_text: str, data_text: str,
     models = PROC_MODELS if proc_models is None else proc_models
     proc0 = proc_slope = 0.0
     unmodeled: list[str] = []
+    classified: list[dict] = []
     for eff in effects:
         model = models.get(str(eff.get("key", "")))
         source = model["damage_source"] if model is not None else None
@@ -119,8 +121,14 @@ def build_weapon_record(stats_text: str, data_text: str,
                 proc_slope += ps
             elif eff.get("key"):
                 unmodeled.append(str(eff["key"]))
-        elif eff.get("key"):
-            unmodeled.append(str(eff["key"]))
+        else:
+            entry = classify_effect(eff)
+            if entry is not None:
+                classified.append(entry)
+            elif eff.get("key") or eff.get("script"):
+                # Blank-key effects were previously dropped silently; naming
+                # them by script keeps hidden mechanics visible.
+                unmodeled.append(str(eff.get("key") or eff["script"]))
 
     return {
         "id": weapon_id,
@@ -142,12 +150,13 @@ def build_weapon_record(stats_text: str, data_text: str,
         "dps_at_zero_rd": dps0,
         "dps_slope_per_rd": slope,
         "sets": list(classes or []),
-        # On-hit effects (e.g. exploding projectile), resolved from the data
-        # .tres `effects` ext_resources. Effects with a verified PROC_MODELS
-        # entry contribute the proc_dps_* expected line; the rest are listed
-        # in unmodeled_effects.
+        # On-hit effects, resolved from the data .tres `effects`
+        # ext_resources. Effects with a verified PROC_MODELS entry contribute
+        # the proc_dps_* expected line; classified non-DPS mechanics land in
+        # classified_effects; anything left is listed in unmodeled_effects.
         "effects": effects,
         "proc_dps_at_zero_rd": proc0,
         "proc_dps_slope_per_rd": proc_slope,
         "unmodeled_effects": unmodeled,
+        "classified_effects": classified,
     }

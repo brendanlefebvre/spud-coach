@@ -398,3 +398,30 @@ def test_weapon_record_companion_omitting_bounce_fields_uses_engine_defaults():
                               weapon_id="w", name="W", tier=1)
     assert math.isclose(rec["proc_dps_at_zero_rd"], 7.6923, rel_tol=1e-4)
     assert rec["unmodeled_effects"] == []
+
+
+def test_weapon_record_classifies_stat_rider_out_of_unmodeled():
+    effect = ('[gd_resource type="Resource" format=2]\n'
+              '[ext_resource path="res://items/global/effect.gd" type="Script" id=1]\n'
+              '[resource]\nscript = ExtResource( 1 )\nkey = "stat_armor"\nvalue = 1\n')
+    rec = build_weapon_record(STATS, DATA, [effect], weapon_id="w", name="W", tier=2)
+    assert rec["unmodeled_effects"] == []
+    assert rec["classified_effects"] == [
+        {"key": "stat_armor", "category": "stat_rider", "value": 1}]
+
+
+def test_weapon_record_blank_key_unknown_script_surfaces_in_unmodeled():
+    effect = ('[gd_resource type="Resource" format=2]\n'
+              '[ext_resource path="res://effects/weapons/mystery_effect.gd" type="Script" id=1]\n'
+              '[resource]\nscript = ExtResource( 1 )\nkey = ""\nvalue = 1\n')
+    rec = build_weapon_record(STATS, DATA, [effect], weapon_id="w", name="W", tier=1)
+    assert rec["classified_effects"] == []
+    assert rec["unmodeled_effects"] == ["mystery_effect.gd"]
+
+
+def test_weapon_record_burn_gate_failure_stays_unmodeled_not_classified():
+    rec = build_weapon_record(STATS, DATA, [BURNING_EFFECT],
+                              [{"burning_data": _burning_data(chance=0.5)}],
+                              weapon_id="w", name="W", tier=1)
+    assert rec["unmodeled_effects"] == ["effect_burning"]
+    assert rec["classified_effects"] == []
