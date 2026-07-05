@@ -121,6 +121,37 @@ main {
   text-align: center;
 }
 
+.section h3 {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--heading);
+  margin: 20px 0 8px;
+}
+
+.section h3:first-of-type {
+  margin-top: 0;
+}
+
+.section ul {
+  margin: 0 0 0 18px;
+  padding: 0;
+  font-size: 0.95rem;
+}
+
+.section li {
+  margin-bottom: 6px;
+}
+
+.section li code {
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--heading);
+}
+
 @media (max-width: 480px) {
   .hero h1 {
     font-size: 2.2rem;

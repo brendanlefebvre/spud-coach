@@ -39,6 +39,58 @@
       <p class="caveat">Requires Python 3.11+ and <a href="https://docs.astral.sh/uv/">uv</a> — <code>uvx</code> comes bundled with it.</p>
       <p class="caveat">You'll need to build your own dataset before use — the game files are copyrighted and never distributed. See the <a href="https://github.com/BrendanL79/spud-coach#building-the-dataset">README</a> for how.</p>
     </section>
+
+    <section class="section">
+      <h2>Build your dataset</h2>
+      <p>The game's data files are copyrighted, so nothing pre-built ships with Spud Coach — you generate <code>data/brotato.json</code> yourself, once, from your own Brotato install.</p>
+      <pre class="install-code"><code>uv run python build_dataset.py</code></pre>
+      <p class="caveat">Needs a local extraction first — see <a href="https://github.com/BrendanL79/spud-coach/blob/main/docs/extraction-setup.md">extraction-setup.md</a>. Game version and build timestamp are auto-detected; re-run after each game patch to refresh your local copy.</p>
+    </section>
+
+    <section class="section">
+      <h2>Connect it to Claude</h2>
+      <h3>Claude Code</h3>
+      <pre class="install-code"><code>claude mcp add brotato-coach -- uv run --directory /path/to/spud-coach python -m brotato_coach.server</code></pre>
+      <h3>Claude Desktop</h3>
+      <pre class="install-code"><code>{
+  "mcpServers": {
+    "spud-coach": {
+      "command": "uvx",
+      "args": ["spudcoach", "--data", "/path/to/brotato.json"]
+    }
+  }
+}</code></pre>
+      <p class="caveat">Add this to <code>claude_desktop_config.json</code>, then fully restart Claude Desktop. Hitting a "Git executable not found" error on Windows? See the <a href="https://github.com/BrendanL79/spud-coach#windows-git-executable-not-found-or-uvx-not-found">README</a>.</p>
+    </section>
+
+    <section class="section">
+      <h2>What you get</h2>
+      <h3>Data lookups</h3>
+      <ul>
+        <li><code>get_weapon</code> / <code>get_item</code> / <code>get_character</code> — full records: stats, effects, kit</li>
+        <li><code>get_weapon_class_set</code> — set bonuses for a weapon class</li>
+        <li><code>list_weapons</code> / <code>list_items</code> — filtered summaries</li>
+        <li><code>get_filter_options</code> — valid filter values (tags, archetypes, tiers, classes)</li>
+      </ul>
+      <h3>DPS &amp; comparison</h3>
+      <ul>
+        <li><code>weapon_dps</code> — one weapon's realized DPS at your stats</li>
+        <li><code>compare_weapons</code> — rank several weapons by DPS</li>
+        <li><code>compare_merge_paths</code> — which tier-merge order wins, and where it flips</li>
+      </ul>
+      <h3>Build evaluation</h3>
+      <ul>
+        <li><code>evaluate_item_for_build</code> — live / wasted / harmful verdict for an item</li>
+        <li><code>loadout_set_bonuses</code> — set-bonus progress across a whole loadout</li>
+        <li><code>explain_stat</code> — a stat's real mechanics (caps, dead-weight ranges)</li>
+        <li><code>stat_display_value</code> — raw stat &rarr; what the game displays</li>
+      </ul>
+      <h3>Run analysis</h3>
+      <ul>
+        <li><code>evaluate_run</code> — post-mortem a whole run.json in one call</li>
+        <li><code>check_dataset_version</code> — which game version the facts are from</li>
+      </ul>
+    </section>
   </main>
 
   <footer class="disclaimer">
