@@ -45,6 +45,27 @@ def _resolve_weapon_refs(extracted_root: str, data_path: str) -> tuple[list[str]
     return effect_paths, classes
 
 
+def _resolve_effect_burning_data(extracted_root: str, effect_paths: list[str]) -> dict[str, str]:
+    """Resolve each effect's `burning_data` ext_resource reference, if any.
+
+    Most weapon effects (e.g. exploding) keep their gameplay numbers inline
+    on the effect resource itself; burning effects instead point to a
+    separate BurningData resource. Returns effect path -> burning_data path,
+    omitting effects that don't reference one.
+    """
+    result: dict[str, str] = {}
+    for effect_path in effect_paths:
+        with open(effect_path, encoding="utf-8") as fh:
+            doc = parse_tres(fh.read())
+        ref = doc.resource.get("burning_data")
+        if isinstance(ref, dict) and "__ext__" in ref:
+            ext = doc.ext_resources.get(ref["__ext__"]) or {}
+            path = _res_url_to_path(extracted_root, ext.get("path"))
+            if path and os.path.isfile(path):
+                result[effect_path] = path
+    return result
+
+
 def find_weapon_dirs(extracted_root: str) -> list[dict]:
     results = []
     for kind in ("ranged", "melee"):
@@ -57,10 +78,12 @@ def find_weapon_dirs(extracted_root: str) -> list[dict]:
                 continue
             weapon_folder = os.path.basename(os.path.dirname(tier_dir))
             stats = glob.glob(os.path.join(tier_dir, "*_stats.tres"))
-            data = glob.glob(os.path.join(tier_dir, "*_data.tres"))
+            data = [p for p in glob.glob(os.path.join(tier_dir, "*_data.tres"))
+                    if not os.path.basename(p).endswith("_burning_data.tres")]
             if not stats or not data:
                 continue
             effect_paths, classes = _resolve_weapon_refs(extracted_root, data[0])
+            burning_data_paths = _resolve_effect_burning_data(extracted_root, effect_paths)
             results.append({
                 "weapon_id": f"weapon_{weapon_folder}",
                 "name": weapon_folder.replace("_", " ").title(),
@@ -68,6 +91,7 @@ def find_weapon_dirs(extracted_root: str) -> list[dict]:
                 "stats_path": stats[0],
                 "data_path": data[0],
                 "effect_paths": effect_paths,
+                "effect_burning_data_paths": burning_data_paths,
                 "classes": classes,
             })
     return results
