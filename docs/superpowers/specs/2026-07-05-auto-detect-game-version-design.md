@@ -1,13 +1,30 @@
-# Auto-detect game version from the decompiled singleton
+# Auto-detect game version + default generated_at (build_dataset.py ergonomics)
 
 ## Goal
 
-`build_dataset.py --game-version` is currently `required=True`, and the README tells users to
-"check the Steam client" for the value because "it is not recorded inside the .pck." That's
-misleading: `recovered/singletons/progress_data.gd` (decompiled GDScript, part of the existing
-`recovered/` extraction) declares `const VERSION = "1.1.15.4"` — the game's own source of truth
-for its version string. Read it from there by default instead of asking the user to supply it
-by hand.
+Two independent `build_dataset.py` ergonomics fixes, bundled into one spec/plan because they're
+the same shape of change (a required CLI arg becomes optional-with-auto-default, explicit value
+still always wins) and touch the same file.
+
+**1. `--game-version`** is currently `required=True`, and the README tells users to "check the
+Steam client" for the value because "it is not recorded inside the .pck." That's misleading:
+`recovered/singletons/progress_data.gd` (decompiled GDScript, part of the existing `recovered/`
+extraction) declares `const VERSION = "1.1.15.4"` — the game's own source of truth for its
+version string. Read it from there by default instead of asking the user to supply it by hand.
+
+**2. `--generated-at`** is currently `required=True` too, justified in project `CLAUDE.md` as
+"passed in, never read from a clock, so builds stay reproducible." Tracing that rule to its
+origin (`docs/superpowers/specs/2026-07-01-brotato-coach-design.md:105`) shows the *original*
+reason was `"(sandbox blocks wall-clock calls in scripts)"` — a constraint on the AI-agent
+environment that originally authored this project, not a real constraint on the shipped CLI
+running on an end user's own machine. The "reproducibility" framing is a legitimate-sounding
+justification bolted onto what was actually a category error. And the value it protects is
+low here anyway: `data/brotato.json` is local-only, gitignored, and never diffed or published
+across machines/builds — a fixed timestamp doesn't make two builds meaningfully "more
+comparable." So: default it to the current UTC time, same explicit-override-always-wins pattern
+as `--game-version`. Existing callers of `assemble_dataset()` (tests, `server.py`) already pass
+`generated_at` as a plain string and are unaffected — this change is entirely in
+`build_dataset.py`'s CLI layer.
 
 ## Design
 
@@ -30,7 +47,7 @@ def parse_game_version(text: str) -> str | None:
     return m.group(1) if m else None
 ```
 
-### `build_dataset.py` changes
+### `build_dataset.py` changes — game version
 
 - `--game-version` changes from `required=True` to `default=None` — an explicit override, not
   a mandatory input.
@@ -56,21 +73,60 @@ than what's in a given `recovered/` checkout (e.g. testing). If neither source y
 the build fails the same way it does today (a required value with no default), just pointed at
 `--version-file` instead of `--game-version` in the error message.
 
+### New module: `brotato_coach/builders/timestamps.py`
+
+One pure function, same shape as `parse_game_version` — takes a `datetime`, returns a string,
+no clock access inside it:
+
+```python
+from datetime import datetime
+
+def format_generated_at(dt: datetime) -> str:
+    """Format a UTC datetime as the ISO8601 form used for generated_at, e.g. '2026-07-05T12:34:56Z'."""
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+```
+
+Keeping the clock read (`datetime.now(timezone.utc)`) out of this function and in
+`build_dataset.py`'s `main()` instead means the formatting logic is testable without mocking the
+system clock — same reasoning as keeping `parse_game_version` pure and doing file I/O in `main()`.
+
+### `build_dataset.py` changes — generated_at
+
+- `--generated-at` changes from `required=True` to `default=None`.
+- Resolution order in `main()`:
+
+```python
+generated_at = args.generated_at
+if generated_at is None:
+    generated_at = format_generated_at(datetime.now(timezone.utc))
+```
+
+No error path here — unlike game version, there's always a fallback (the actual current time),
+so this can never fail the way version detection can.
+
 ### Docs updates
 
 - `README.md`'s "Building the dataset" section: both the Bash and PowerShell example commands
-  drop the `--game-version` line entirely (it's now optional/auto-detected). Add a sentence
-  noting auto-detection from `recovered/singletons/progress_data.gd`, with `--game-version` kept
-  documented as an explicit-override flag for the rare case the file's missing or wrong.
-- Project `CLAUDE.md`'s build snippet (`uv run python build_dataset.py --game-version <ver>
-  --generated-at <iso8601>`) updates to drop `--game-version`, keeping the "generated_at is
-  never read from a clock" reproducibility note (unaffected — this change is only about
-  `game_version`, which was never clock-derived to begin with).
+  drop to just `uv run python build_dataset.py` with no flags (both `--game-version` and
+  `--generated-at` are now optional/auto-populated) — collapsing what were previously two
+  separate platform-specific commands (needed only because of the `--generated-at` shell date
+  substitution) into one identical command for both platforms. Add a sentence noting: game
+  version is auto-detected from `recovered/singletons/progress_data.gd`, generated_at defaults
+  to the current UTC time; both remain available as explicit-override flags (e.g. for pinning a
+  reproducible value in a test or release script).
+- Project `CLAUDE.md`'s build snippet updates from `uv run python build_dataset.py --game-version
+  <ver> --generated-at <iso8601>` (with "Both args are **required**... so builds stay
+  reproducible") to `uv run python build_dataset.py` (no required args), with a note that both
+  values auto-populate and can still be pinned via `--game-version`/`--generated-at` for
+  reproducible builds (e.g. CI, release scripts, or regenerating a byte-identical dataset for
+  comparison).
 - Downstream effect (not part of this task, tracked separately): the not-yet-implemented landing
   page "Build your dataset" section (`2026-07-05-landing-page-content-expansion-design.md`)
-  currently shows `--game-version <your-installed-version>` in its PowerShell command — that
-  spec needs a follow-up edit to drop the flag once this change lands, since the whole point of
-  that placeholder was working around the exact manual-entry problem this task removes.
+  currently shows a PowerShell command with `--game-version <your-installed-version>` and a
+  `(Get-Date)...` `--generated-at` expression — that spec needs a follow-up edit to collapse to
+  the bare `uv run python build_dataset.py` command once this change lands, since the whole
+  point of those two flags in that draft was working around the exact manual-entry problems this
+  task removes.
 
 ## Testing (TDD)
 
@@ -83,18 +139,25 @@ New `tests/test_build_version.py`, following the existing `test_build_<module>.p
 - `parse_game_version` returns `None` for a near-miss (e.g. `const VERSION_SWITCH = "..."` alone,
   no bare `VERSION`) — guards against the regex matching the wrong constant.
 
+New `tests/test_build_timestamps.py`:
+
+- `format_generated_at` on a fixed `datetime(2026, 7, 5, 12, 34, 56, tzinfo=timezone.utc)`
+  returns exactly `"2026-07-05T12:34:56Z"`.
+
 No test needs a real `recovered/` checkout — this worktree doesn't have one (it's gitignored),
-and the function under test takes text, not a path. The `build_dataset.py` CLI wiring
-(file-exists check, `parser.error` fallback) is thin enough to be covered by inspection rather
-than a dedicated subprocess test, consistent with `build_dataset.py` having no existing test
-file of its own today.
+and the functions under test take text/`datetime`, not paths or the live clock. The
+`build_dataset.py` CLI wiring (file-exists check, `parser.error` fallback, the `datetime.now()`
+call itself) is thin enough to be covered by inspection rather than a dedicated subprocess test,
+consistent with `build_dataset.py` having no existing test file of its own today.
 
 ## Out of scope
 
-- Changing `brotato_coach/dataset.py`'s `assemble_dataset(game_version=...)` signature — it
-  already just takes a string; where that string comes from is entirely `build_dataset.py`'s
-  concern.
+- Changing `brotato_coach/dataset.py`'s `assemble_dataset(game_version=..., generated_at=...)`
+  signature — it already just takes strings; where those strings come from is entirely
+  `build_dataset.py`'s concern.
 - Validating the detected version against any known-good list, or warning on version mismatches
   between `--extracted` and the detected value — out of scope for this fix.
+- Any change to how `generated_at` or `game_version` are used downstream (`check_dataset_version`
+  tool, schema) — this task only changes how the values are obtained at build time.
 - Implementing the landing-page spec's follow-up edit — noted above, but that's a change to an
   already-approved separate spec, not part of this task.
