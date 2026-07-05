@@ -45,6 +45,18 @@ def proc_line(dps0: float, slope: float, chance: float, enemies_hit: float,
     return (dps0 * f, slope * f)
 
 
+def burn_dps_line(damage_per_tick: float, tick_interval: float = 0.5) -> tuple[float, float]:
+    """Expected DPS line from a sustained burn (damage-over-time) proc.
+
+    Assumes steady-state: once ignited, the burn is kept continuously
+    refreshed by the weapon's own attacks (verified true for every shipped
+    burn weapon — see docs/proc-mechanics.md). Burn damage scales off
+    stat_elemental_damage, not RD, so slope is always 0 in this dataset's
+    RD-parameterized model.
+    """
+    return (damage_per_tick / tick_interval, 0.0)
+
+
 def compare_lines(line_a: tuple[float, float], line_b: tuple[float, float],
                   rd_min: float = 0.0, rd_max: float = 100.0) -> dict:
     a0, as_ = line_a

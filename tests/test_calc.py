@@ -64,3 +64,21 @@ def test_proc_line_scales_with_enemies_hit_and_multiplier():
     p0, ps = calc.proc_line(20.0, 0.4, chance=0.5, enemies_hit=3.0, multiplier=0.5)
     assert math.isclose(p0, 15.0)
     assert math.isclose(ps, 0.3)
+
+
+def test_burn_dps_line_typical():
+    dps0, slope = calc.burn_dps_line(3.0, 0.5)
+    assert math.isclose(dps0, 6.0)
+    assert slope == 0.0
+
+
+def test_burn_dps_line_default_tick_interval():
+    dps0, slope = calc.burn_dps_line(5.0)
+    assert math.isclose(dps0, 10.0)
+    assert slope == 0.0
+
+
+def test_burn_dps_line_zero_damage():
+    dps0, slope = calc.burn_dps_line(0.0)
+    assert dps0 == 0.0
+    assert slope == 0.0
