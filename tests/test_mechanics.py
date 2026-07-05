@@ -24,3 +24,7 @@ DISPLAYED_STATS = (
 def test_all_displayed_stats_have_mechanics():
     missing = [s for s in DISPLAYED_STATS if s not in STAT_MECHANICS]
     assert missing == []
+
+
+def test_stat_range_projectile_speed_nuance_documented():
+    assert "increase_projectile_speed_with_range" in STAT_MECHANICS["stat_range"]["summary"]

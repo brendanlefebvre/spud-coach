@@ -110,5 +110,10 @@ STAT_MECHANICS: dict[str, dict] = {
                 "init_melee_pet_stats:66) — both are floored at that "
                 "weapon's own min_range, so it can shrink an increase's "
                 "effect but never push range below the weapon's floor. Not "
-                "in utils.gd's cap list — uncapped."),
+                "in utils.gd's cap list — uncapped. Weapons flagged "
+                "increase_projectile_speed_with_range (only Flamethrower "
+                "T2-T4 ship with this) also scale projectile_speed = "
+                "clamp(projectile_speed + projectile_speed/300 * "
+                "stat_range, 50, 6000) "
+                "(weapon_service.gd::_set_common_ranged_stats:115)."),
 }
