@@ -166,3 +166,32 @@ def test_weapon_record_falls_back_to_slug_name_without_translations():
                               name="Shredder", tier=4)
     assert rec["display_name"] == "Shredder"
     assert rec["description"] == ""
+
+
+BURNING_EFFECT = ('[gd_resource type="Resource" format=2]\n'
+                  '[ext_resource path="res://effects/weapons/burning_effect.gd" type="Script" id=1]\n'
+                  '[resource]\nscript = ExtResource( 1 )\n'
+                  'key = "effect_burning"\nvalue = 0\n')
+
+BURNING_DATA = ('[gd_resource type="Resource" format=2]\n[resource]\n'
+                'chance = 1.0\ndamage = 3\nduration = 3\nspread = 0\n'
+                'scaling_stats = [ [ "stat_elemental_damage", 1.0 ] ]\n'
+                'is_global_burn = false\n')
+
+
+def test_weapon_record_merges_burning_data_companion():
+    rec = build_weapon_record(STATS, DATA, [BURNING_EFFECT], [BURNING_DATA],
+                              weapon_id="w", name="W", tier=1)
+    e = rec["effects"][0]
+    assert e["key"] == "effect_burning"
+    assert e["burning_data"] == {
+        "chance": 1.0, "damage": 3, "duration": 3, "spread": 0,
+        "scaling_stats": [["stat_elemental_damage", 1.0]],
+        "is_global_burn": False,
+    }
+
+
+def test_weapon_record_effect_without_companion_has_no_burning_data_key():
+    rec = build_weapon_record(STATS, DATA, [BURNING_EFFECT],
+                              weapon_id="w", name="W", tier=1)
+    assert "burning_data" not in rec["effects"][0]
