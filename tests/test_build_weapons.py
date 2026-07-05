@@ -118,8 +118,10 @@ def test_weapon_record_proc_line_from_model():
 
 
 def test_weapon_record_unmodeled_effect_contributes_zero_and_is_listed():
-    # effect_burning has no PROC_MODELS entry (unverified against recovered/
-    # code) — unlike the exploding-effect keys, which are now modeled.
+    # effect_burning has a PROC_MODELS entry, but this fixture builds it
+    # with no burning_data companion resolved, so `bd.get("chance", 0.0)`
+    # defaults to 0.0, failing the chance == 1.0 gate and falling back to
+    # unmodeled — same outcome as an effect with no model at all.
     burning_effect = EXPLODE_EFFECT.replace("effect_explode_custom", "effect_burning")
     rec = build_weapon_record(STATS, DATA, [burning_effect], weapon_id="w",
                               name="W", tier=4)
