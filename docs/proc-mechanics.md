@@ -159,16 +159,19 @@ evidence: `docs/superpowers/research/2026-07-05-family-lightning.md` and
   `RangedWeaponStats` (`weapon_stats = ExtResource(N)` on the effect .tres)
   carries its own `damage`, `scaling_stats`, crit fields. At the dataset's
   zero-stat baseline this reduces to the companion's raw `damage` field
-  (`weapon_service.gd` `init_ranged_stats(…, is_special_spawn=true)`).
-- Targeting (`weapon_service.gd:353-357`): with `auto_target_enemy=true`
-  (lightning users) the projectile aims at a uniformly *random other* enemy
-  (`entity_spawner.gd:485-495`, excludes the triggering enemy — worth 0
-  against a lone target); with `false` (all other users) the direction stays
-  `rand_range(-PI, PI)` — an unaimed spray.
-- Bounce chaining (`player_projectile.gd:119-129`) re-rolls a random target
-  per hop; lightning users ship `bounce` 0/1/2/3/4 with an explicit
-  `bounce_dmg_reduction = 0.0` (engine default is 0.5,
-  `ranged_weapon_stats.gd:9`); spray users ship `bounce = 0`.
+  (`recovered/singletons/weapon_service.gd` `init_ranged_stats(…,
+  is_special_spawn=true)`).
+- Targeting (`recovered/singletons/weapon_service.gd:353-357`): with
+  `auto_target_enemy=true` (lightning users) the projectile aims at a
+  uniformly *random other* enemy (`recovered/global/entity_spawner.gd:485-495`,
+  excludes the triggering enemy — worth 0 against a lone target); with
+  `false` (all other users) the direction stays `rand_range(-PI, PI)` — an
+  unaimed spray.
+- Bounce chaining (`recovered/projectiles/player_projectile.gd:119-129`)
+  re-rolls a random target per hop; lightning users ship `bounce` 0/1/2/3/4
+  with an explicit `bounce_dmg_reduction = 0.0` (engine default is 0.5,
+  `recovered/weapons/weapon_stats/ranged_weapon_stats.gd:9`); spray users
+  ship `bounce = 0`.
 
 ### Model
 
@@ -194,7 +197,8 @@ hit-probability math is modeled, since no shipped weapon needs it.
 
 Thunder Sword's spawned projectile is literally taser's bullet scene, whose
 `SlowHitbox` applies a hardcoded `add_decaying_speed(-200)`
-(`taser_projectile.gd:15-17`) — the slow is CC (see classification below);
+(`recovered/projectiles/bullet_taser/taser_projectile.gd:15-17`) — the slow
+is CC (see classification below);
 this model scores only the companion's damage=1 sliver.
 
 ## Effect classification (`brotato_coach/builders/classifications.py`)
@@ -209,14 +213,14 @@ then key string) — never per-weapon lists. Categories, with evidence in the
 
 | category | shipped examples | notes |
 |---|---|---|
-| `stat_rider` | Rock armor/HP, Hand harvesting, Fighting Stick xp_gain, Hammer knockback (player-wide, `weapon_service.gd:265-270`), Jousting Lance speed, Torch `burning_spread` (+1 one-hop burn spread, global stat, `weapon_service.gd:334`), Chopper `consumable_heal`, Scythe... | flat SUM grant while held (`run_data.gd:989/1081`) |
-| `dynamic` | Jousting Lance stand-still −damage% (`player.gd:215-239`), Scythe T4 on-player-hit stack (`player.gd:493-495`), Excalibur −2 armor × weapons owned (`run_data.gd:1190-1203`), Sharp Tooth missing-HP lifesteal (`linked_stats.gd`), Drill T4 unbounded +AS/5s, Rail Gun no-hit ramp (`railgun.gd:82-99`), Ghost weapons kill ratchet (`weapon.gd:211-232`) | state/build/time-dependent; no honest static number — deliberately no metadata value |
-| `economy` | Dagger/Drill `gold_on_crit_kill` (`unit.gd:376-379`, value%/100 for +1 gold on crit-kill) | |
-| `cc` | Particle Accelerator slow (engineering-scaled, `weapon_service.gd:191` → `unit.gd:605-606`), Taser `effect_slow_in_zone` (inert marker — the −200 slow is hardcoded in the projectile scene, not in extracted data) | |
-| `delivery_modifier` | Crossbow `pierce_on_crit`, Shuriken `bounce_on_crit` (`player_projectile.gd:132-154`: each crit converts one charge into +1 pierce/bounce, per-projectile budget, 0% damage falloff by explicit override) | no DPS number — the expected crit-chain needs a crowd-density assumption on top of `crit_chance`; deferred |
-| `drawback` | Scythe T4 `lose_hp_per_second` (3 HP/s, undodgeable/unarmored, `player.gd:844-850`) | |
-| `execute` | Vorpal Sword T2-4 blank-key `OneShotOnHitEffect` (`unit.gd:285-305`: value% chance to force damage = target's current HP) | chance surfaces as `execute_chance_per_hit`; damage is run-state-dependent, never folded into DPS |
-| `stack` | Stick `EFFECT_WEAPON_STACK` (`weapon_service.gd:192-197`: +value flat damage per extra copy owned, additive before RD scaling → slope 0) | `bonus_per_extra_copy` metadata; per-copies DPS needs a loadout axis the schema doesn't have — computed at answer time if needed |
+| `stat_rider` | Rock armor/HP, Hand harvesting, Fighting Stick xp_gain, Hammer knockback (player-wide, `recovered/singletons/weapon_service.gd:265-270`), Jousting Lance speed, Torch `burning_spread` (+1 one-hop burn spread, global stat, `recovered/singletons/weapon_service.gd:334`), Chopper `consumable_heal` | flat SUM grant while held (`recovered/singletons/run_data.gd:989/1081`) |
+| `dynamic` | Jousting Lance stand-still −damage% (`recovered/entities/units/player/player.gd:215-239`), Scythe T4 on-player-hit stack (`recovered/entities/units/player/player.gd:493-495`), Excalibur −2 armor × weapons owned (`recovered/singletons/run_data.gd:1190-1203`), Sharp Tooth missing-HP lifesteal (`recovered/singletons/linked_stats.gd`), Drill T4 unbounded +AS/5s, Rail Gun no-hit ramp (`recovered/weapons/ranged/rail_gun/railgun.gd:82-99`), Ghost weapons kill ratchet (`recovered/weapons/weapon.gd:211-232`) | state/build/time-dependent; no honest static number — deliberately no metadata value |
+| `economy` | Dagger/Drill `gold_on_crit_kill` (`recovered/entities/units/unit/unit.gd:376-379`, value%/100 for +1 gold on crit-kill) | |
+| `cc` | Particle Accelerator slow (engineering-scaled, `recovered/singletons/weapon_service.gd:191` → `recovered/entities/units/unit/unit.gd:605-606`), Taser `effect_slow_in_zone` (inert marker — the −200 slow is hardcoded in the projectile scene, not in extracted data) | |
+| `delivery_modifier` | Crossbow `pierce_on_crit`, Shuriken `bounce_on_crit` (`recovered/projectiles/player_projectile.gd:132-154`: each crit converts one charge into +1 pierce/bounce, per-projectile budget, 0% damage falloff by explicit override) | no DPS number — the expected crit-chain needs a crowd-density assumption on top of `crit_chance`; deferred |
+| `drawback` | Scythe T4 `lose_hp_per_second` (3 HP/s, undodgeable/unarmored, `recovered/entities/units/player/player.gd:844-850`) | |
+| `execute` | Vorpal Sword T2-4 blank-key `OneShotOnHitEffect` (`recovered/entities/units/unit/unit.gd:285-305`: value% chance to force damage = target's current HP) | chance surfaces as `execute_chance_per_hit`; damage is run-state-dependent, never folded into DPS |
+| `stack` | Stick `EFFECT_WEAPON_STACK` (`recovered/singletons/weapon_service.gd:192-197`: +value flat damage per extra copy owned, additive before RD scaling → slope 0) | `bonus_per_extra_copy` metadata; per-copies DPS needs a loadout axis the schema doesn't have — computed at answer time if needed |
 | `structure` | Screwdriver landmines (blank key, `StructureEffect`; mine damage flat 10 + `stat_engineering` scaling for all tiers, tier only buys spawn rate 12/9/6/3s; trigger is enemy enter-then-exit pathing — no evidence anchor for an "eventually triggers" steady state), Pruner garden (`TurretEffect`, `damage = 0` explicit — healing-fruit spawner; `spawn_cooldown` in frames, unlike StructureEffect's seconds) | `spawn_cooldown` is the raw engine value — units differ by script |
 
 ## Unmodeled effect-key worklist
