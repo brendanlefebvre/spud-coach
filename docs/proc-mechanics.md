@@ -135,36 +135,128 @@ if either fails, rather than extrapolating an unverified duty-cycle formula
 for `chance < 1.0` or a slower-cycling weapon — no shipped weapon exercises
 either case.
 
+## Companion-projectile procs (`ProjectilesOnHitEffect`, `recovered/effects/weapons/projectiles_on_hit_effect.gd`)
+
+One script class serves four differently-keyed effects (dispatch is on script
+class; casing is cosmetic): `effect_lightning_on_hit` (Lightning Shiv T1-4,
+Dextroyer T4), `effect_projectiles_on_hit` (Cactus Mace T1-4),
+`EFFECT_PROJECTILES_ON_HIT` (Sniper Gun T3-4), and
+`EFFECT_SLOW_PROJECTILES_ON_HIT` (Thunder Sword T3-4). All share one
+`PROC_MODELS` entry (`damage_source: "companion_ranged_stats"`). Full
+evidence: `docs/superpowers/research/2026-07-05-family-lightning.md` and
+`...-family-projectiles-on-hit.md`.
+
+### Mechanics
+
+- `recovered/weapons/weapon.gd:146-149` (`init_stats`): for a
+  `ProjectilesOnHitEffect`, the hitbox carries `[effect.value, companion
+  weapon_stats, effect.auto_target_enemy]`.
+- `recovered/entities/units/unit/unit.gd:586-603`: on every landed hit,
+  `value` projectiles spawn from the just-hit enemy's position —
+  **unconditionally** (no chance roll; there is no `chance` field on this
+  effect class, and `value` is a spawn count, not a probability).
+- Damage is fully independent of the host weapon: the companion
+  `RangedWeaponStats` (`weapon_stats = ExtResource(N)` on the effect .tres)
+  carries its own `damage`, `scaling_stats`, crit fields. At the dataset's
+  zero-stat baseline this reduces to the companion's raw `damage` field
+  (`weapon_service.gd` `init_ranged_stats(…, is_special_spawn=true)`).
+- Targeting (`weapon_service.gd:353-357`): with `auto_target_enemy=true`
+  (lightning users) the projectile aims at a uniformly *random other* enemy
+  (`entity_spawner.gd:485-495`, excludes the triggering enemy — worth 0
+  against a lone target); with `false` (all other users) the direction stays
+  `rand_range(-PI, PI)` — an unaimed spray.
+- Bounce chaining (`player_projectile.gd:119-129`) re-rolls a random target
+  per hop; lightning users ship `bounce` 0/1/2/3/4 with an explicit
+  `bounce_dmg_reduction = 0.0` (engine default is 0.5,
+  `ranged_weapon_stats.gd:9`); spray users ship `bounce = 0`.
+
+### Model
+
+`proc_dps0 = companion_damage × value × enemies_hit / host_cycle_time`, slope
+via the companion's own `stat_ranged_damage` coefficient (nonzero only for
+Cactus Mace, 0.6→1.0 by tier; lightning scales off elemental, Sniper Gun off
+`stat_range`, Thunder Sword off elemental — slope 0 for those).
+
+`enemies_hit` policy (the softest number, like exploding's
+`default_enemies_hit`):
+
+- targeted chain: `1 + bounce`, gated on lossless bounce (`bounce == 0` or
+  `bounce_dmg_reduction == 0.0`) — assumes the nominal chain connects;
+  optimistic in sparse fields, 0 against a lone enemy.
+- untargeted spray: `1.0` per volley, gated on `bounce == 0` — a pure
+  assumption constant; a random-direction volley has no evidence anchor for
+  its hit rate. Callers evaluating single-target scenarios should override
+  down, as with exploding.
+
+Gate failures (missing companion/damage, `value <= 0`, lossy or unexpected
+bounce) fall back to `unmodeled_effects` — no decaying-bounce or
+hit-probability math is modeled, since no shipped weapon needs it.
+
+Thunder Sword's spawned projectile is literally taser's bullet scene, whose
+`SlowHitbox` applies a hardcoded `add_decaying_speed(-200)`
+(`taser_projectile.gd:15-17`) — the slow is CC (see classification below);
+this model scores only the companion's damage=1 sliver.
+
+## Effect classification (`brotato_coach/builders/classifications.py`)
+
+Effects with no damage model but a fully evidenced mechanic are classified
+into `classified_effects` on the weapon record instead of polluting
+`unmodeled_effects` (which now strictly means "uninvestigated" — blank-key
+effects surface there by script basename instead of being dropped silently).
+Classification is mechanism-based (script basename, then `storage_method`,
+then key string) — never per-weapon lists. Categories, with evidence in the
+2026-07-05 research dossiers:
+
+| category | shipped examples | notes |
+|---|---|---|
+| `stat_rider` | Rock armor/HP, Hand harvesting, Fighting Stick xp_gain, Hammer knockback (player-wide, `weapon_service.gd:265-270`), Jousting Lance speed, Torch `burning_spread` (+1 one-hop burn spread, global stat, `weapon_service.gd:334`), Chopper `consumable_heal`, Scythe... | flat SUM grant while held (`run_data.gd:989/1081`) |
+| `dynamic` | Jousting Lance stand-still −damage% (`player.gd:215-239`), Scythe T4 on-player-hit stack (`player.gd:493-495`), Excalibur −2 armor × weapons owned (`run_data.gd:1190-1203`), Sharp Tooth missing-HP lifesteal (`linked_stats.gd`), Drill T4 unbounded +AS/5s, Rail Gun no-hit ramp (`railgun.gd:82-99`), Ghost weapons kill ratchet (`weapon.gd:211-232`) | state/build/time-dependent; no honest static number — deliberately no metadata value |
+| `economy` | Dagger/Drill `gold_on_crit_kill` (`unit.gd:376-379`, value%/100 for +1 gold on crit-kill) | |
+| `cc` | Particle Accelerator slow (engineering-scaled, `weapon_service.gd:191` → `unit.gd:605-606`), Taser `effect_slow_in_zone` (inert marker — the −200 slow is hardcoded in the projectile scene, not in extracted data) | |
+| `delivery_modifier` | Crossbow `pierce_on_crit`, Shuriken `bounce_on_crit` (`player_projectile.gd:132-154`: each crit converts one charge into +1 pierce/bounce, per-projectile budget, 0% damage falloff by explicit override) | no DPS number — the expected crit-chain needs a crowd-density assumption on top of `crit_chance`; deferred |
+| `drawback` | Scythe T4 `lose_hp_per_second` (3 HP/s, undodgeable/unarmored, `player.gd:844-850`) | |
+| `execute` | Vorpal Sword T2-4 blank-key `OneShotOnHitEffect` (`unit.gd:285-305`: value% chance to force damage = target's current HP) | chance surfaces as `execute_chance_per_hit`; damage is run-state-dependent, never folded into DPS |
+| `stack` | Stick `EFFECT_WEAPON_STACK` (`weapon_service.gd:192-197`: +value flat damage per extra copy owned, additive before RD scaling → slope 0) | `bonus_per_extra_copy` metadata; per-copies DPS needs a loadout axis the schema doesn't have — computed at answer time if needed |
+| `structure` | Screwdriver landmines (blank key, `StructureEffect`; mine damage flat 10 + `stat_engineering` scaling for all tiers, tier only buys spawn rate 12/9/6/3s; trigger is enemy enter-then-exit pathing — no evidence anchor for an "eventually triggers" steady state), Pruner garden (`TurretEffect`, `damage = 0` explicit — healing-fruit spawner; `spawn_cooldown` in frames, unlike StructureEffect's seconds) | `spawn_cooldown` is the raw engine value — units differ by script |
+
 ## Unmodeled effect-key worklist
 
 Effect `key` values found across `extracted/weapons/*.tres`
-(`grep -rh '^key = ' extracted/weapons/ | sort | uniq -c`), for future
-`PROC_MODELS` entries. Only the exploding-effect and burning keys above are
-modeled so far; everything else here contributes zero to `proc_dps_at_zero_rd` and shows
-up in a weapon record's `unmodeled_effects` list (except the *(blank key)* row —
-a falsy `key` is silently dropped by the builder, not listed):
+(`grep -rh '^key = ' extracted/weapons/ | sort | uniq -c`). As of the
+2026-07-05 triage (research dossiers under `docs/superpowers/research/`),
+every shipped key is either modeled (contributes to `proc_dps_*`) or
+classified (`classified_effects`); `unmodeled_effects` is empty across the
+shipped dataset and now strictly means "uninvestigated." Blank-key effects
+are named by script basename rather than silently dropped.
 
-| count | key |
-|---|---|
-| 19 | `effect_burning` (modeled) |
-| 12 | `effect_gain_stat_every_killed_enemies` |
-| 10 | *(blank key)* |
-| 9  | `effect_explode_melee` (modeled) |
-| 5  | `stat_percent_damage` |
-| 5  | `gold_on_crit_kill` |
-| 5  | `effect_lightning_on_hit` |
-| 5  | `effect_explode` (modeled) |
-| 4  | `xp_gain` |
-| 4  | `stat_speed` |
-| 4  | `stat_lifesteal` |
-| 4  | `stat_harvesting` |
-| 4  | `stat_armor` |
-| 4  | `pierce_on_crit` |
-| 4  | `effect_projectiles_on_hit` |
-| 4  | `effect_no_hit_boost` |
-| 4  | `bounce_on_crit` |
-| 4  | `EFFECT_WEAPON_STACK` |
-| 3  | `knockback` |
-| 3  | `effect_explode_custom` (modeled) |
-
-(plus assorted single-count `stat_*` passthroughs not itemized above)
+| count | key | disposition |
+|---|---|---|
+| 19 | `effect_burning` | modeled (burn_dot) |
+| 12 | `effect_gain_stat_every_killed_enemies` | classified: dynamic |
+| 10 | *(blank key)* | classified: execute (Vorpal Sword) / structure (Screwdriver, Pruner) |
+| 9  | `effect_explode_melee` | modeled (weapon_damage) |
+| 5  | `stat_percent_damage` | classified: dynamic (KEY_VALUE storage on all shipped users) |
+| 5  | `gold_on_crit_kill` | classified: economy |
+| 5  | `effect_lightning_on_hit` | modeled (companion_ranged_stats) |
+| 5  | `effect_explode` | modeled (weapon_damage) |
+| 4  | `xp_gain` | classified: stat_rider |
+| 4  | `stat_speed` | classified: stat_rider |
+| 4  | `stat_lifesteal` | classified: dynamic (missing-HP-scaled) |
+| 4  | `stat_harvesting` | classified: stat_rider |
+| 4  | `stat_armor` | classified: stat_rider (Rock) / dynamic (Excalibur, KEY_VALUE) |
+| 4  | `pierce_on_crit` | classified: delivery_modifier |
+| 4  | `effect_projectiles_on_hit` | modeled (companion_ranged_stats) |
+| 4  | `effect_no_hit_boost` | classified: dynamic |
+| 4  | `bounce_on_crit` | classified: delivery_modifier |
+| 4  | `EFFECT_WEAPON_STACK` | classified: stack |
+| 3  | `knockback` | classified: stat_rider |
+| 3  | `effect_explode_custom` | modeled (weapon_damage) |
+| 2  | `EFFECT_PROJECTILES_ON_HIT` | modeled (companion_ranged_stats) |
+| 2  | `EFFECT_SLOW_PROJECTILES_ON_HIT` | modeled (damage sliver) + CC noted |
+| 2  | `EFFECT_WEAPON_SLOW_ON_HIT` | classified: cc |
+| 2  | `burning_spread` | classified: stat_rider (global) |
+| 2  | `consumable_heal` | classified: stat_rider |
+| 2  | `stat_max_hp` | classified: stat_rider |
+| 1  | `effect_slow_in_zone` | classified: cc |
+| 1  | `lose_hp_per_second` | classified: drawback |
+| 1  | `stat_attack_speed` | classified: dynamic (interval accumulator) |
