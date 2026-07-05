@@ -244,3 +244,24 @@ def test_weapon_record_burn_dot_falls_back_without_burning_data():
                               weapon_id="w", name="W", tier=1)
     assert rec["proc_dps_at_zero_rd"] == 0.0
     assert rec["unmodeled_effects"] == ["effect_burning"]
+
+
+def test_weapon_record_burn_dot_falls_back_when_damage_missing():
+    # chance == 1.0 and duration comfortably clear the window gate (same
+    # cycle_time setup as test_weapon_record_burn_dot_contributes_when_
+    # preconditions_hold), but the burning_data companion has no `damage`
+    # key at all. This must NOT be modeled as a 0-DPS contribution -- it
+    # must fall back to unmodeled_effects, same as any other missing field.
+    burning_data_no_damage = (
+        '[gd_resource type="Resource" format=2]\n[resource]\n'
+        'chance = 1.0\nduration = 3\nspread = 0\n'
+        'scaling_stats = [ [ "stat_elemental_damage", 1.0 ] ]\n'
+        'is_global_burn = false\n')
+    stats = ('[gd_resource type="Resource" format=2]\n[resource]\n'
+             'cooldown = 31\ndamage = 5\naccuracy = 1.0\nrecoil_duration = 0.1\n'
+             'scaling_stats = [ [ "stat_melee_damage", 1.0 ] ]\n')
+    rec = build_weapon_record(stats, DATA, [BURNING_EFFECT], [burning_data_no_damage],
+                              weapon_id="w", name="W", tier=1)
+    assert rec["proc_dps_at_zero_rd"] == 0.0
+    assert rec["proc_dps_slope_per_rd"] == 0.0
+    assert rec["unmodeled_effects"] == ["effect_burning"]

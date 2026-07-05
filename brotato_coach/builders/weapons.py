@@ -60,7 +60,8 @@ def build_weapon_record(stats_text: str, data_text: str,
     dps0, slope = calc.dps_line(base_damage, _rd_coefficient(scaling_stats), ct, accuracy)
 
     extras = effect_extra_texts or [None] * len(effect_texts or [])
-    effects = [_weapon_effect_record(t, e) for t, e in zip(effect_texts or [], extras)]
+    effects = [_weapon_effect_record(t, e)
+               for t, e in zip(effect_texts or [], extras, strict=True)]
     models = PROC_MODELS if proc_models is None else proc_models
     proc0 = proc_slope = 0.0
     unmodeled: list[str] = []
@@ -76,11 +77,11 @@ def build_weapon_record(stats_text: str, data_text: str,
         elif source == "burn_dot":
             bd = eff.get("burning_data") or {}
             chance = float(bd.get("chance", 0.0))
-            damage = float(bd.get("damage", 0))
+            damage = bd.get("damage")
             duration = float(bd.get("duration", 0))
             window = duration * model["tick_interval"]
-            if chance == 1.0 and window > 0 and ct <= window:
-                p0, ps = calc.burn_dps_line(damage, model["tick_interval"])
+            if chance == 1.0 and damage is not None and window > 0 and ct <= window:
+                p0, ps = calc.burn_dps_line(float(damage), model["tick_interval"])
                 proc0 += p0
                 proc_slope += ps
             elif eff.get("key"):
