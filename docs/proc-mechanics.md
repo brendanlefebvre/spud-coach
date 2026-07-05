@@ -81,6 +81,60 @@ All three keys get the same `PROC_MODELS` entry (see below).
   weapon.gd above) to the explosion's own hitbox — no separate flat damage
   value is defined on the scene itself.
 
+## Burning effect (`BurningEffect`, `recovered/effects/weapons/burning_effect.gd`)
+
+Unlike the exploding effect, `effect_burning`'s gameplay numbers
+(`chance`/`damage`/`duration`/`spread`/`scaling_stats`) are **not** on the
+weapon-effect `.tres` itself — they live on a separate `BurningData`
+resource, referenced only as `burning_data = ExtResource( N )`. The
+build pipeline resolves and merges this companion file (`discover.py`'s
+`_resolve_effect_burning_data`, `weapons.py`'s `_weapon_effect_record`).
+
+### Tick mechanics
+
+- `recovered/entities/units/unit/unit.tscn:51-52`: `BurningTimer` node,
+  `wait_time = 0.5` — burns tick every 0.5s. This is an engine constant,
+  not per-weapon.
+- `recovered/entities/units/unit/unit.gd:581-583`: on a landed hit,
+  `if hitbox.burning_data != null and
+  Utils.get_chance_success(hitbox.burning_data.chance) ...:
+  apply_burning(hitbox.burning_data)` — chance is rolled once per landed
+  hit, not per tick.
+- `recovered/entities/units/unit/unit.gd:618-648` (`apply_burning`):
+  re-applying while already burning refreshes via `max()` on
+  chance/damage/duration/spread — it does not stack additively.
+- `recovered/entities/units/unit/unit.gd:660-706` (burn tick handler):
+  each tick deals a flat `_burning.damage`, then `_burning.duration -= 1`;
+  burn ends at `duration <= 0`.
+- `recovered/singletons/weapon_service.gd:290-332` (`init_burning_data`):
+  `damage` is scaled by the burn's own `scaling_stats` (default
+  `[["stat_elemental_damage", 1.0]]`, `recovered/effects/burning_data.gd:8`)
+  then by `stat_percent_damage`. At zero of both — this dataset's baseline —
+  it reduces to `max(1, base_damage)`, i.e. the `.tres` `damage` field
+  as-is.
+- `recovered/effects/burning_data.gd:4`: `export (float) var chance: = 0.0`
+  — burn's own missing-field default is **0.0**, unlike the exploding
+  effect's default of `1.0`.
+
+### Damage dealt
+
+- `damage_source: "burn_dot"`, modeled as
+  `dps0 = damage_per_tick / 0.5`, `slope = 0.0` (`calc.burn_dps_line`).
+  Assumes steady-state: continuous attacking keeps the burn refreshed from
+  ignition onward, so uptime is effectively 100%.
+
+### Verified precondition (not a general model)
+
+Empirically checked across every shipped burn weapon and tier
+(`extracted/weapons/**/*_burning_data.tres` + matching `*_stats.tres`):
+every one has `chance = 1.0`, and every one has
+`cycle_time <= duration × 0.5s` (tightest margin: Particle Accelerator T3,
+cycle_time≈1.95s vs. a 4s window). The model in `builders/weapons.py`
+enforces both conditions per-weapon and falls back to `unmodeled_effects`
+if either fails, rather than extrapolating an unverified duty-cycle formula
+for `chance < 1.0` or a slower-cycling weapon — no shipped weapon exercises
+either case.
+
 ## Unmodeled effect-key worklist
 
 Effect `key` values found across `extracted/weapons/*.tres`
@@ -92,7 +146,7 @@ a falsy `key` is silently dropped by the builder, not listed):
 
 | count | key |
 |---|---|
-| 19 | `effect_burning` |
+| 19 | `effect_burning` (modeled) |
 | 12 | `effect_gain_stat_every_killed_enemies` |
 | 10 | *(blank key)* |
 | 9  | `effect_explode_melee` (modeled) |
