@@ -105,8 +105,13 @@ The DPS model is deliberately narrow and honest about it:
     (enemies_hit = 1 + bounce; also zero against a lone target); untargeted
     sprays assume 1.0 expected hit per volley — an assumption constant, not
     a measurement.
-  - The player-level explosion_damage stat is unmodeled: builds stacking it
-    out-damage the static exploding proc line.
+  - Two player-level stats push exploding procs ABOVE these lines and are
+    NOT modeled here, so builds stacking them out-damage the static proc
+    line. explosion_damage is a % bonus to the exploding weapon's damage —
+    apply it by hand by multiplying the exploding proc line by
+    (1 + explosion_damage/100) (a +15 item scales the line by 1.15).
+    explosion_size widens the blast so more enemies are caught; it has no
+    closed form, so raise the enemies_hit you assume for such builds.
 - **classified_effects.** Non-DPS effects are classified, with metadata,
   into 9 categories: stat_rider (flat stat granted while held), dynamic
   (state/time-dependent, no honest static number), economy (gold

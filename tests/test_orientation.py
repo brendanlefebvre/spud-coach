@@ -26,6 +26,9 @@ def test_primer_contains_required_sentinels():
         # dataset-convention vocabulary
         "dps_at_zero_rd", "dps_slope_per_rd", "zero-stat", "cycle_time",
         "classified_effects", "unmodeled_effects", "enemies_hit",
+        # exploding-proc rider stats: both named, with the manual formula
+        # for explosion_damage so callers compute instead of giving up
+        "explosion_size", "(1 + explosion_damage/100)",
         # the game-basics disclaimer, verbatim per spec
         "Orientation only — general game knowledge, not source-verified.",
         # tool pointers

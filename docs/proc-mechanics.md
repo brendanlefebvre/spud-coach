@@ -60,7 +60,7 @@ All three keys get the same `PROC_MODELS` entry (see below).
   'key = "effect_explode' extracted/weapons/ | xargs grep chance`), so the
   default never actually fires for a shipped weapon today.
 
-### Known limitation: `explosion_damage` player stat (unmodeled)
+### Known limitation: `explosion_damage` / `explosion_size` player stats (unmodeled)
 
 - `recovered/singletons/weapon_service.gd:245-249`: weapons flagged
   `is_exploding` get an *additional* multiplicative damage bonus from the
@@ -80,6 +80,18 @@ All three keys get the same `PROC_MODELS` entry (see below).
   explosion scene and applies `args` (the damage + scaling stats captured in
   weapon.gd above) to the explosion's own hitbox — no separate flat damage
   value is defined on the scene itself.
+- Manual application: at the zero-stat baseline the fold is a clean scalar,
+  so a build's exploding proc line is `proc_dps_at_zero_rd x (1 +
+  explosion_damage / 100)`. Combined with other `% damage`, confirm the
+  bucket (additive-in-`stat_percent_damage` vs. separate factor) against
+  `weapon_service.gd:245-249` before quoting a combined number.
+- `explosion_size` is a second player stat that items grant (e.g. items
+  tagged `explosive`); it widens the blast radius, so more *other* enemies
+  are caught and the effective `enemies_hit` for the exploding proc rises.
+  It is likewise unmodeled and, unlike `explosion_damage`, has no closed
+  form — reasoning about such builds should raise the assumed `enemies_hit`.
+  TODO: source-pin the radius→hit-count mechanic against `recovered/`
+  (the explosion scene / `weapon_service.explode`); not yet re-pinned here.
 
 ## Burning effect (`BurningEffect`, `recovered/effects/weapons/burning_effect.gd`)
 
