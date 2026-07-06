@@ -54,3 +54,77 @@ def list_enemies(ds: dict, *, appears_in=None, ability=None, attack_kind=None) -
                     "attack_kind": e.get("attack", {}).get("kind"),
                     "appears_in": e.get("appears_in", [])})
     return out
+
+
+_SCALES_WITH = ["number_of_enemies % (item/character modifier)",
+                "co-op player count"]
+_ELITE_HORDE_LABEL = ("elite/horde waves are scheduled per-run (randomized at "
+                      "run start) — treat as possible on this wave, not guaranteed")
+
+
+def _wave_record(ds: dict, wave: int) -> dict | None:
+    for w in ds.get("zone_1_waves", []):
+        if w.get("wave") == wave:
+            return w
+    return None
+
+
+def wave_composition(ds: dict, wave: int, danger: int | None = None) -> dict:
+    w = _wave_record(ds, wave)
+    if w is None:
+        return {"error": "not_found", "detail": f"no base-game wave {wave} (valid 1-20)"}
+    groups = []
+    for g in w.get("groups", []):
+        if danger is not None and not (g["min_danger"] <= danger <= g["max_danger"]):
+            continue
+        groups.append(g)
+    return {
+        "wave": wave,
+        "wave_duration": w.get("wave_duration"),
+        "max_enemies": w.get("max_enemies"),
+        "base_enemies": groups,
+        "scales_with": _SCALES_WITH,
+        "elite_horde": _ELITE_HORDE_LABEL,
+        "notes": ["base_count and repeats are pre-modifier base values"],
+    }
+
+
+def wave_context(ds: dict, wave: int, danger: int | None = None) -> dict:
+    comp = wave_composition(ds, wave, danger)
+    if comp.get("error"):
+        return comp
+    by_id = {e["id"]: e for e in ds.get("enemies", [])}
+    present_ids = [g["enemy_id"] for g in comp["base_enemies"]]
+
+    # enemies first seen in the ~3 waves ending at `wave`
+    recent = set()
+    earlier = set()
+    for w in ds.get("zone_1_waves", []):
+        ids = {g["enemy_id"] for g in w.get("groups", [])}
+        if w["wave"] < wave - 2:
+            earlier |= ids
+        elif w["wave"] <= wave:
+            recent |= ids
+    newly_introduced = sorted(recent - earlier)
+
+    effective_threat = []
+    for eid in dict.fromkeys(present_ids):  # de-dup, preserve order
+        e = by_id.get(eid)
+        if e is None:
+            continue
+        eff = effective_stats(e, wave)
+        effective_threat.append({
+            "enemy_id": eid,
+            "attack_kind": e.get("attack", {}).get("kind"),
+            "health": eff["health"],
+            "damage": eff["damage"],
+        })
+    return {
+        "death_wave": wave,
+        "composition": comp,
+        "newly_introduced": newly_introduced,
+        "effective_threat": effective_threat,
+        "elite_horde_note": (
+            f"wave {wave} can roll an elite/horde (per-run, randomized); "
+            "if you hit a wall here, that may be why"),
+    }

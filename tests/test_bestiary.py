@@ -49,3 +49,44 @@ def test_get_enemy_miss_suggests():
 def test_list_enemies_filters_by_attack_kind():
     out = bestiary.list_enemies(_DS, attack_kind="ranged")
     assert [e["id"] for e in out] == ["spitter"]
+
+
+_DS_WAVES = {
+    "enemies": _DS["enemies"],
+    "zone_1_waves": [
+        {"wave": 12, "wave_duration": 60, "max_enemies": 100, "groups": [
+            {"enemy_id": "baby_alien", "base_count": [5, 5], "first_spawn_s": 1,
+             "repeats": 5, "repeat_interval": 3, "spawn_chance": 1.0,
+             "min_danger": 0, "max_danger": 9999, "is_horde": False,
+             "is_boss": False, "is_loot": False},
+            {"enemy_id": "spitter", "base_count": [1, 2], "first_spawn_s": 5,
+             "repeats": 999, "repeat_interval": 15, "spawn_chance": 1.0,
+             "min_danger": 6, "max_danger": 9999, "is_horde": False,
+             "is_boss": False, "is_loot": False},
+        ]},
+    ],
+}
+
+
+def test_wave_composition_danger_gates_groups():
+    at0 = bestiary.wave_composition(_DS_WAVES, 12, danger=0)
+    ids0 = [g["enemy_id"] for g in at0["base_enemies"]]
+    assert ids0 == ["baby_alien"]           # spitter group is d6-only
+
+    at6 = bestiary.wave_composition(_DS_WAVES, 12, danger=6)
+    ids6 = [g["enemy_id"] for g in at6["base_enemies"]]
+    assert set(ids6) == {"baby_alien", "spitter"}
+
+
+def test_wave_composition_labels_run_variance():
+    comp = bestiary.wave_composition(_DS_WAVES, 12)
+    assert "number_of_enemies" in " ".join(comp["scales_with"])
+    assert "per-run" in comp["elite_horde"].lower()
+
+
+def test_wave_context_has_effective_threat_at_wave():
+    ctx = bestiary.wave_context(_DS_WAVES, 12, danger=0)
+    assert ctx["death_wave"] == 12
+    threat = {t["enemy_id"]: t for t in ctx["effective_threat"]}
+    # baby_alien effective HP at wave 12 = 3 + 2*11 = 25
+    assert threat["baby_alien"]["health"] == 25
