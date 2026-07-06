@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 
 from brotato_coach.tres import parse_tres
 
@@ -237,4 +238,54 @@ def find_enemy_dirs(extracted_root: str) -> list[dict]:
             "stats_path": stats_path,
             "scene_path": scene if os.path.isfile(scene) else None,
         })
+    return results
+
+
+_WAVE_FILE_RE = re.compile(r"wave_(\d+)\.tres$")
+
+
+def find_zone_waves(extracted_root: str) -> list[dict]:
+    """Numbered zone_1 waves 1-20, resolving each wave's groups and their units.
+
+    Excludes the "021 (test)" dir (wave number > 20). Each result carries the
+    wave text path plus, per group, the group .tres path and its unit .tres
+    paths, resolved through the ext_resource tables.
+    """
+    base = os.path.join(extracted_root, "zones", "zone_1")
+    results = []
+    for wave_path in sorted(glob.glob(os.path.join(base, "*", "wave_*.tres"))):
+        m = _WAVE_FILE_RE.search(os.path.basename(wave_path))
+        if not m:
+            continue
+        wave_no = int(m.group(1))
+        if not (1 <= wave_no <= 20):
+            continue
+        with open(wave_path, encoding="utf-8") as fh:
+            wdoc = parse_tres(fh.read())
+        group_paths, unit_paths_by_group = [], {}
+        for entry in wdoc.resource.get("groups_data", []) or []:
+            if not (isinstance(entry, dict) and "__ext__" in entry):
+                continue
+            gpath = _res_url_to_path(extracted_root,
+                                     (wdoc.ext_resources.get(entry["__ext__"]) or {}).get("path"))
+            if not (gpath and os.path.isfile(gpath)):
+                continue
+            group_paths.append(gpath)
+            gkey = os.path.basename(gpath)
+            with open(gpath, encoding="utf-8") as fh:
+                gdoc = parse_tres(fh.read())
+            units = []
+            for uentry in gdoc.resource.get("wave_units_data", []) or []:
+                if isinstance(uentry, dict) and "__ext__" in uentry:
+                    upath = _res_url_to_path(
+                        extracted_root,
+                        (gdoc.ext_resources.get(uentry["__ext__"]) or {}).get("path"))
+                    if upath and os.path.isfile(upath):
+                        units.append(upath)
+            unit_paths_by_group[gkey] = units
+        results.append({
+            "wave": wave_no, "wave_path": wave_path,
+            "group_paths": group_paths, "unit_paths_by_group": unit_paths_by_group,
+        })
+    results.sort(key=lambda r: r["wave"])
     return results

@@ -278,3 +278,19 @@ def test_find_enemy_dirs_accepts_bare_stats_tres(tmp_path):
     found = discover.find_enemy_dirs(str(tmp_path))
     assert [e["enemy_id"] for e in found] == ["evil_mob"]
     assert found[0]["stats_path"].endswith("evil_mob.tres")
+
+
+def test_find_zone_waves_excludes_test_wave(tmp_path):
+    from brotato_coach.builders import discover
+
+    z = tmp_path / "zones" / "zone_1"
+    (z / "001").mkdir(parents=True)
+    (z / "001" / "wave_1.tres").write_text(
+        '[resource]\ngroups_data = [  ]\n', encoding="utf-8")
+    test_dir = z / "021 (test)"
+    test_dir.mkdir()
+    (test_dir / "wave_21.tres").write_text(
+        '[resource]\ngroups_data = [  ]\n', encoding="utf-8")
+
+    waves = discover.find_zone_waves(str(tmp_path))
+    assert [w["wave"] for w in waves] == [1]  # wave 21 (test) excluded
