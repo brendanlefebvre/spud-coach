@@ -217,7 +217,7 @@ def test_find_weapon_dirs_includes_companion_paths(tmp_path):
     assert len(found) == 1
     companions = found[0]["effect_companion_paths"]
     assert len(companions) == 1
-    only = list(companions.values())[0]
+    only = next(iter(companions.values()))
     assert only["burning_data"].endswith("torch_burning_data.tres")
 
 

@@ -327,3 +327,7 @@ exercises a case this dossier can resolve on its own.
   effect's `weapon_stats` ext_resource reference (already recommended by the
   lightning dossier) rather than a filename convention — this dossier adds a
   second, different real-world counterexample to that recommendation.
+  *(Status addendum, post-Phase 3: closed later on this same branch —
+  `build_weapon_record` now nests the resolved companion under
+  `effects[i]["weapon_stats"]`, resolved via the ext_resource reference as
+  recommended. The paragraph above describes the pre-triage state.)*

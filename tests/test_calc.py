@@ -102,4 +102,5 @@ def test_companion_dps_line_cactus_mace_t1_golden():
 
 def test_companion_dps_line_zero_count_is_zero():
     dps0, slope = calc.companion_dps_line(10.0, 1.0, 1.0, 0.0, 1.0)
-    assert dps0 == 0.0 and slope == 0.0
+    assert dps0 == 0.0
+    assert slope == 0.0

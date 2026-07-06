@@ -336,3 +336,7 @@ case is exercised today for this key.
   parameter for. This key cannot be modeled without equivalent plumbing added
   to resolve and nest the companion `.tres` under something like
   `effects[i].weapon_stats`.
+  *(Status addendum, post-Phase 3: closed later on this same branch —
+  `build_weapon_record` now nests the resolved companion under
+  `effects[i]["weapon_stats"]`, resolved via the ext_resource reference. The
+  paragraph above describes the pre-triage state.)*
