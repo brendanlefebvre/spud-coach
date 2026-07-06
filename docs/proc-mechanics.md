@@ -60,7 +60,7 @@ All three keys get the same `PROC_MODELS` entry (see below).
   'key = "effect_explode' extracted/weapons/ | xargs grep chance`), so the
   default never actually fires for a shipped weapon today.
 
-### Known limitation: `explosion_damage` player stat (unmodeled)
+### Known limitation: `explosion_damage` / `explosion_size` player stats (unmodeled)
 
 - `recovered/singletons/weapon_service.gd:245-249`: weapons flagged
   `is_exploding` get an *additional* multiplicative damage bonus from the
@@ -80,6 +80,30 @@ All three keys get the same `PROC_MODELS` entry (see below).
   explosion scene and applies `args` (the damage + scaling stats captured in
   weapon.gd above) to the explosion's own hitbox — no separate flat damage
   value is defined on the scene itself.
+- Bucket (confirmed, `recovered/singletons/weapon_service.gd:249`):
+  `new_stats.damage = round(new_stats.damage * (set_bonus_dmg +
+  percent_dmg_bonus + exploding_dmg_bonus))`. `exploding_dmg_bonus`
+  (line 247, `explosion_damage / 100`) is added into the SAME multiplier
+  bucket as `stat_percent_damage` (line 239 — the term carrying the `1 +`)
+  and set `% damage` (line 177) — it is NOT a separate multiplicative factor.
+  So `+X` explosion_damage adds `X/100` to that shared bucket: at the
+  zero-stat baseline the line scales `x1.15` for a `+15` item, but on a build
+  already at `+P%` damage the multiplier goes `1 + P/100` -> `1 + (P+X)/100`,
+  NOT another `x1.15`.
+- Scope (confirmed): the bonus lands in `new_stats.damage` (line 249) — the
+  weapon's damage stat used for its DIRECT hits — and the explosion re-deals
+  that same `_hitbox.damage` (`weapon.gd:427`). So for an exploding weapon
+  `explosion_damage` lifts the ENTIRE damage line (direct + proc), meaning the
+  static `dps_at_zero_rd` under-models it too, not only `proc_dps_at_zero_rd`.
+- `explosion_size` (confirmed, `recovered/projectiles/player_explosion.gd:70-73`):
+  `set_area` computes `explosion_scale = max(0.1, p_area * (1 +
+  explosion_size / 100))` and applies it as `scale = Vector2(s, s)` — a linear
+  scale on the blast in both axes, so the radius scales `1 + explosion_size/100`
+  and the area `(1 + explosion_size/100)^2`. Base 0
+  (`player_run_data.gd:442`). Larger area catches more *other* enemies but the
+  radius->hit-count mapping is density-dependent with no closed form, so
+  reasoning about such builds should raise the assumed `enemies_hit`.
+  `explosion_size` does not change per-hit explosion damage.
 
 ## Burning effect (`BurningEffect`, `recovered/effects/weapons/burning_effect.gd`)
 
