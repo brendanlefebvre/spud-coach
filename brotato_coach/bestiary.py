@@ -100,10 +100,13 @@ def wave_context(ds: dict, wave: int, danger: int | None = None) -> dict:
     recent = set()
     earlier = set()
     for w in ds.get("zone_1_waves", []):
+        wv = w.get("wave")
+        if wv is None:
+            continue
         ids = {g["enemy_id"] for g in w.get("groups", [])}
-        if w["wave"] < wave - 2:
+        if wv < wave - 2:
             earlier |= ids
-        elif w["wave"] <= wave:
+        elif wv <= wave:
             recent |= ids
     newly_introduced = sorted(recent - earlier)
 

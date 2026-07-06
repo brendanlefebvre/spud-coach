@@ -55,8 +55,10 @@ def build_wave_record(wave_text: str, group_texts: list[str],
                       unit_texts_by_group: dict[str, list[str]], *, wave: int) -> dict:
     w = parse_tres(wave_text).resource
     groups: list[dict] = []
-    # group_texts are in wave order; map each to its units via the group's own
-    # basename key in unit_texts_by_group when available, else positional.
+    # Positional pairing: group_texts[i] corresponds to the i-th entry in
+    # unit_texts_by_group. find_zone_waves builds both in a single pass (same
+    # order), so this 1:1 index alignment holds. (Relies on that construction
+    # order — it is not a basename-keyed lookup.)
     keys = list(unit_texts_by_group.keys())
     for i, gtext in enumerate(group_texts):
         units = unit_texts_by_group.get(keys[i]) if i < len(keys) else []
