@@ -3,11 +3,15 @@
 Coarse, high-level next steps — a shared backlog, not committed timelines.
 Ordered by priority.
 
-Shipped: proc-aware DPS with verified exploding-effect models, loadout
-set-bonus reasoning, the complete 16-stat mechanics table, localized
-names/effect text (dataset schema v2), run-save ingestion (`evaluate_run`
-post-mortem tool), the PyPI release (`uvx spudcoach`, currently v0.9.3), and
-the official MCP registry listing.
+Shipped: proc-aware DPS with verified exploding/burning/companion-projectile
+models, the full proc-worklist triage (every shipped effect modeled or
+classified — `unmodeled_effects` is empty dataset-wide; 9-category
+`classified_effects` with metadata like Vorpal's execute chance), loadout
+set-bonus reasoning, the complete 16-stat mechanics table (incl. the
+`stat_range` projectile-speed nuance), localized names/effect text (dataset
+schema v2), run-save ingestion (`evaluate_run` post-mortem tool), the PyPI
+release (`uvx spudcoach`, currently v0.9.3), and the official MCP registry
+listing.
 
 ## Ship (in progress)
 
@@ -28,13 +32,4 @@ the official MCP registry listing.
 
 ## Backlog (successors from shipped work)
 
-- **Model the rest of the proc worklist** — only exploding procs carry
-  expected DPS today; every other on-hit effect contributes zero and is
-  surfaced in `unmodeled_effects`. `docs/proc-mechanics.md` holds the
-  evidence-gated worklist (`effect_burning` ×19 is the top entry). The first
-  non-`weapon_damage` model also triggers the deferred `aggregate_proc_dps`
-  extraction.
-- **stat_range projectile-speed nuance** — `weapon_service.gd::
-  _set_common_ranged_stats:115` scales projectile speed off `stat_range`, but
-  only for weapons with `increase_projectile_speed_with_range` (clamped
-  50–6000). Verify and encode with the flag condition.
+(empty — proc worklist and stat_range nuance shipped via PRs #8/#9)
