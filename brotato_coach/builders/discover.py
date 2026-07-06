@@ -194,3 +194,10 @@ def find_set_dirs(extracted_root: str) -> list[dict]:
             "set_data_path": set_data, "count_effect_paths": count_effects,
         })
     return results
+
+
+def find_challenge_paths(extracted_root: str) -> list[str]:
+    """Top-level challenges/*.tres — one per ChallengeData (achievement or
+    internal unlock; achievements.merge_achievement_records filters the latter
+    out). Excludes challenges/global/, which holds the .gd schema, not data."""
+    return sorted(glob.glob(os.path.join(extracted_root, "challenges", "*.tres")))
