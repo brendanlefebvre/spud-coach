@@ -40,6 +40,27 @@ def test_shipped_dataset_is_complete():
     assert torch["proc_dps_at_zero_rd"] > 0
     assert torch["unmodeled_effects"] == []
 
+    # companion-projectile procs carry expected lines
+    shiv = query.get_weapon(ds, "Lightning Shiv", tier=1)
+    assert shiv["proc_dps_at_zero_rd"] > 0
+    cactus = query.get_weapon(ds, "Cactus Mace", tier=1)
+    assert cactus["proc_dps_at_zero_rd"] > 0
+    assert cactus["proc_dps_slope_per_rd"] > 0  # companion scales off RD
+
+    # classified specials carry structured metadata
+    stick = query.get_weapon(ds, "Stick", tier=1)
+    assert any(c["category"] == "stack" and c["bonus_per_extra_copy"] == 4
+               for c in stick["classified_effects"])
+    vorpal = query.get_weapon(ds, "Vorpal Sword", tier=2)
+    assert any(c["category"] == "execute" and c["execute_chance_per_hit"] == 0.01
+               for c in vorpal["classified_effects"])
+    screwdriver = query.get_weapon(ds, "Screwdriver", tier=1)
+    assert any(c["category"] == "structure" and c["structure_damage"] == 10
+               for c in screwdriver["classified_effects"])
+
+    # the proc worklist is fully triaged: nothing shipped is unmodeled
+    assert all(w["unmodeled_effects"] == [] for w in ds["weapons"])
+
     # localization resolved real in-game text
     sh = query.get_weapon(ds, "Shredder", tier=1)
     assert sh["display_name"] == "Shredder"

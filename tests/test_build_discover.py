@@ -119,7 +119,7 @@ def test_find_set_dirs(tmp_path):
     assert sorted(e["count_effect_paths"].keys()) == [2, 6]
 
 
-def test_resolve_effect_burning_data_finds_companion_resource(tmp_path):
+def test_resolve_effect_companions_finds_burning_data(tmp_path):
     from brotato_coach.builders import discover
     wdir = tmp_path / "weapons" / "melee" / "torch" / "1"
     wdir.mkdir(parents=True)
@@ -134,12 +134,53 @@ def test_resolve_effect_burning_data_finds_companion_resource(tmp_path):
         '[gd_resource type="Resource" format=2]\n[resource]\n'
         'chance = 1.0\ndamage = 3\nduration = 3\n', encoding="utf-8")
 
-    result = discover._resolve_effect_burning_data(str(tmp_path), [str(effect_path)])
+    result = discover._resolve_effect_companions(str(tmp_path), [str(effect_path)])
     assert list(result.keys()) == [str(effect_path)]
-    assert result[str(effect_path)].endswith("torch_burning_data.tres")
+    assert result[str(effect_path)]["burning_data"].endswith("torch_burning_data.tres")
 
 
-def test_resolve_effect_burning_data_skips_effects_without_one(tmp_path):
+def test_resolve_effect_companions_finds_weapon_stats(tmp_path):
+    from brotato_coach.builders import discover
+    wdir = tmp_path / "weapons" / "melee" / "lightning_shiv" / "1"
+    wdir.mkdir(parents=True)
+    effect_path = wdir / "lightning_shiv_effect_1.tres"
+    effect_path.write_text(
+        '[gd_resource type="Resource" format=2]\n'
+        '[ext_resource path="res://effects/weapons/projectiles_on_hit_effect.gd" type="Script" id=1]\n'
+        '[ext_resource path="res://weapons/melee/lightning_shiv/1/lightning_shiv_projectile.tres" type="Resource" id=2]\n'
+        '[resource]\nscript = ExtResource( 1 )\nkey = "effect_lightning_on_hit"\n'
+        'value = 1\nweapon_stats = ExtResource( 2 )\nauto_target_enemy = true\n',
+        encoding="utf-8")
+    (wdir / "lightning_shiv_projectile.tres").write_text(
+        '[gd_resource type="Resource" format=2]\n[resource]\ndamage = 5\n',
+        encoding="utf-8")
+
+    result = discover._resolve_effect_companions(str(tmp_path), [str(effect_path)])
+    assert result[str(effect_path)]["weapon_stats"].endswith("lightning_shiv_projectile.tres")
+
+
+def test_resolve_effect_companions_finds_structure_stats_outside_weapon_dir(tmp_path):
+    from brotato_coach.builders import discover
+    wdir = tmp_path / "weapons" / "melee" / "screwdriver" / "1"
+    wdir.mkdir(parents=True)
+    mines = tmp_path / "items" / "all" / "landmines"
+    mines.mkdir(parents=True)
+    (mines / "landmine_stats.tres").write_text(
+        '[gd_resource type="Resource" format=2]\n[resource]\ndamage = 10\n',
+        encoding="utf-8")
+    effect_path = wdir / "screwdriver_effect.tres"
+    effect_path.write_text(
+        '[gd_resource type="Resource" format=2]\n'
+        '[ext_resource path="res://effects/items/structure_effect.gd" type="Script" id=1]\n'
+        '[ext_resource path="res://items/all/landmines/landmine_stats.tres" type="Resource" id=3]\n'
+        '[resource]\nscript = ExtResource( 1 )\nkey = ""\nvalue = 1\n'
+        'spawn_cooldown = 12\nstats = ExtResource( 3 )\n', encoding="utf-8")
+
+    result = discover._resolve_effect_companions(str(tmp_path), [str(effect_path)])
+    assert result[str(effect_path)]["stats"].endswith("landmine_stats.tres")
+
+
+def test_resolve_effect_companions_skips_effects_without_any(tmp_path):
     from brotato_coach.builders import discover
     wdir = tmp_path / "weapons" / "ranged" / "shredder" / "1"
     wdir.mkdir(parents=True)
@@ -148,11 +189,12 @@ def test_resolve_effect_burning_data_skips_effects_without_one(tmp_path):
         '[gd_resource type="Resource" format=2]\n[resource]\n'
         'key = "effect_explode_custom"\nchance = 0.5\n', encoding="utf-8")
 
-    result = discover._resolve_effect_burning_data(str(tmp_path), [str(effect_path)])
+    result = discover._resolve_effect_companions(str(tmp_path), [str(effect_path)])
     assert result == {}
 
 
-def test_find_weapon_dirs_includes_burning_data_paths(tmp_path):
+def test_find_weapon_dirs_includes_companion_paths(tmp_path):
+    from brotato_coach.builders.discover import find_weapon_dirs
     wdir = tmp_path / "weapons" / "melee" / "torch" / "1"
     wdir.mkdir(parents=True)
     (wdir / "torch_stats.tres").write_text("stats")
@@ -173,9 +215,10 @@ def test_find_weapon_dirs_includes_burning_data_paths(tmp_path):
 
     found = find_weapon_dirs(str(tmp_path))
     assert len(found) == 1
-    paths = found[0]["effect_burning_data_paths"]
-    assert len(paths) == 1
-    assert list(paths.values())[0].endswith("torch_burning_data.tres")
+    companions = found[0]["effect_companion_paths"]
+    assert len(companions) == 1
+    only = next(iter(companions.values()))
+    assert only["burning_data"].endswith("torch_burning_data.tres")
 
 
 def test_find_weapon_dirs_main_data_glob_skips_burning_data_companion(tmp_path):

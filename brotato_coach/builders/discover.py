@@ -45,24 +45,35 @@ def _resolve_weapon_refs(extracted_root: str, data_path: str) -> tuple[list[str]
     return effect_paths, classes
 
 
-def _resolve_effect_burning_data(extracted_root: str, effect_paths: list[str]) -> dict[str, str]:
-    """Resolve each effect's `burning_data` ext_resource reference, if any.
+# Effect fields whose value is an ext_resource reference to a companion .tres
+# carrying the real gameplay numbers. Resolution follows the reference URL —
+# never a filename glob: three distinct companion naming conventions ship
+# (`*_burning_data`, `*_projectile`, `*_proj_stats`), and structure stats live
+# outside the weapon dir entirely (items/all/landmines/). A filename-based
+# approach already caused the *_data.tres glob collision fixed in 25f8ca2.
+_COMPANION_FIELDS = ("burning_data", "weapon_stats", "stats")
 
-    Most weapon effects (e.g. exploding) keep their gameplay numbers inline
-    on the effect resource itself; burning effects instead point to a
-    separate BurningData resource. Returns effect path -> burning_data path,
-    omitting effects that don't reference one.
+
+def _resolve_effect_companions(extracted_root: str, effect_paths: list[str]) -> dict[str, dict[str, str]]:
+    """Resolve each effect's companion-resource references, if any.
+
+    Returns effect path -> {field name: companion path}, omitting effects
+    that reference no companion.
     """
-    result: dict[str, str] = {}
+    result: dict[str, dict[str, str]] = {}
     for effect_path in effect_paths:
         with open(effect_path, encoding="utf-8") as fh:
             doc = parse_tres(fh.read())
-        ref = doc.resource.get("burning_data")
-        if isinstance(ref, dict) and "__ext__" in ref:
-            ext = doc.ext_resources.get(ref["__ext__"]) or {}
-            path = _res_url_to_path(extracted_root, ext.get("path"))
-            if path and os.path.isfile(path):
-                result[effect_path] = path
+        companions: dict[str, str] = {}
+        for field in _COMPANION_FIELDS:
+            ref = doc.resource.get(field)
+            if isinstance(ref, dict) and "__ext__" in ref:
+                ext = doc.ext_resources.get(ref["__ext__"]) or {}
+                path = _res_url_to_path(extracted_root, ext.get("path"))
+                if path and os.path.isfile(path):
+                    companions[field] = path
+        if companions:
+            result[effect_path] = companions
     return result
 
 
@@ -83,7 +94,7 @@ def find_weapon_dirs(extracted_root: str) -> list[dict]:
             if not stats or not data:
                 continue
             effect_paths, classes = _resolve_weapon_refs(extracted_root, data[0])
-            burning_data_paths = _resolve_effect_burning_data(extracted_root, effect_paths)
+            companion_paths = _resolve_effect_companions(extracted_root, effect_paths)
             results.append({
                 "weapon_id": f"weapon_{weapon_folder}",
                 "name": weapon_folder.replace("_", " ").title(),
@@ -91,7 +102,7 @@ def find_weapon_dirs(extracted_root: str) -> list[dict]:
                 "stats_path": stats[0],
                 "data_path": data[0],
                 "effect_paths": effect_paths,
-                "effect_burning_data_paths": burning_data_paths,
+                "effect_companion_paths": companion_paths,
                 "classes": classes,
             })
     return results
