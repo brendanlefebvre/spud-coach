@@ -172,6 +172,20 @@ with no `unknown`.
   Shipped paragraph, noting the package-prose decision superseding the
   build-time-distillation idea.
 
+## Addendum (2026-07-06, post-approval): item-tier normalization
+
+Fact-checking the primer's tier claim surfaced a pre-existing inconsistency:
+weapon records ship tiers 1–4 (from directory names) while item records ship
+the raw 0-indexed `.tres` field (0–3), and server docstrings claimed
+"weapons 1–6". `runfile.py:12` already declares 1-indexed tiers as the
+coach's convention, and 1-indexed (I–IV) is what the game UI shows.
+Decision (Brendan): normalize item tiers to 1–4 at build time
+(`items.py` tier+1), correct the docstrings, and bump `DATASET_VERSION`
+to 3 — as a prerequisite task in this feature's plan, so the primer can
+state one simple rule: "tiers everywhere are 1-indexed (1–4), matching the
+in-game display." Item tier is only ever equality-filtered (no arithmetic),
+so the change is contained to the builder, docstrings, and tests.
+
 ## Workflow
 
 - Fresh worktree `read-me-tool`, branch `worktree-read-me-tool` off main
