@@ -6,7 +6,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from brotato_coach import answers, dataset, evaluate, query, runfile
+from brotato_coach import answers, dataset, evaluate, orientation, query, runfile
 from brotato_coach.schemas import Stats
 
 
@@ -30,12 +30,28 @@ if the question seems simple or you're confident you already know the
 answer. If no tool seems to fit, call get_filter_options or list_items /
 list_weapons to check what actually exists before concluding something isn't
 present. Call check_dataset_version if you need to confirm which game
-version these facts are from.
+version these facts are from. Start each session by calling read_me once —
+it explains the dataset's conventions and the assumptions behind every
+precomputed number.
 """
 
 
 def build_server(ds: dict) -> FastMCP:
     mcp = FastMCP("brotato-coach", instructions=_INSTRUCTIONS)
+
+    @mcp.tool()
+    def read_me() -> dict[str, Any]:
+        """Return the orientation primer for this server: how Brotato's core
+        loop works, the source-verified stat mechanics, and — critically —
+        what this dataset's precomputed fields mean and which assumptions
+        they bake in.
+
+        Call this ONCE at the start of a session, before any other tool.
+        Without it you will misread the DPS fields (they are RD-parameterized
+        lines at a zero-stat baseline, not realized DPS) and miss the model's
+        documented assumptions.
+        """
+        return _safe(orientation.read_me_payload)(ds=ds)
 
     @mcp.tool()
     def get_weapon(name: str, tier: int | None = None) -> dict[str, Any]:

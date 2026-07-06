@@ -27,7 +27,7 @@ def test_server_registers_tools():
         return {t.name for t in tools}
 
     tool_names = asyncio.run(_list_names())
-    assert {"get_weapon", "weapon_dps", "evaluate_item_for_build",
+    assert {"read_me", "get_weapon", "weapon_dps", "evaluate_item_for_build",
             "check_dataset_version"} <= tool_names
 
 
@@ -185,3 +185,13 @@ def test_data_path_env_fallback(monkeypatch):
     monkeypatch.setenv("SPUDCOACH_DATA", "/env/brotato.json")
     assert server._data_path([]) == "/env/brotato.json"
     assert server._data_path(["--data", "/flag.json"]) == "/flag.json"
+
+
+def test_read_me_tool_returns_rendered_primer():
+    result = asyncio.run(_call(build_server(DS), "read_me"))
+    # DS fixture: game_version "dev", schema_version 1, generated_at "t"
+    assert "Dataset: Brotato vdev — schema v1, generated t." in result["primer"]
+
+
+def test_instructions_point_to_read_me():
+    assert "read_me" in build_server(DS).instructions
