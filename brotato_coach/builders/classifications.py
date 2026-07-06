@@ -64,10 +64,17 @@ def classify_effect(eff: dict) -> dict | None:
                 "bonus_per_extra_copy": eff.get("value")}
     if script in ("structure_effect.gd", "turret_effect.gd"):
         stats = eff.get("stats") or {}
+        spawn_cooldown = eff.get("spawn_cooldown")
+        if not isinstance(spawn_cooldown, (int, float)) or spawn_cooldown < 0:
+            # Spawning turrets (e.g. Pruner's garden) leave the inherited
+            # spawn_cooldown field at its -1 sentinel; their real cadence is
+            # the structure's own stats.cooldown, in frames.
+            spawn_cooldown = stats.get("cooldown")
         return {"key": key or "structure", "category": "structure",
-                # Raw engine value: seconds for StructureEffect, frames for
-                # TurretEffect — units documented in docs/proc-mechanics.md.
-                "spawn_cooldown": eff.get("spawn_cooldown"),
+                # Raw engine value: seconds for StructureEffect's own field,
+                # frames when falling back to a turret's stats.cooldown —
+                # units documented in docs/proc-mechanics.md.
+                "spawn_cooldown": spawn_cooldown,
                 "structure_damage": stats.get("damage"),
                 "structure_scaling_stats": stats.get("scaling_stats")}
     if script in _DYNAMIC_SCRIPTS:

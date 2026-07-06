@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from brotato_coach import calc
+from brotato_coach.builders.classifications import classify_effect
 from brotato_coach.builders.localization import resolve_text
 from brotato_coach.builders.procs import PROC_MODELS
-from brotato_coach.builders.classifications import classify_effect
 from brotato_coach.tres import parse_tres
 
 

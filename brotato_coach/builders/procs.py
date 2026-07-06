@@ -6,15 +6,19 @@ docs/proc-mechanics.md. Effects without a model contribute zero DPS and are
 listed in the weapon record's `unmodeled_effects`, so rankings stay honest
 about what they ignore.
 
-Model schema, keyed by effect `key`:
-    damage_source: "weapon_damage" — the proc re-deals the weapon's own damage
-        line (base + scaling), scaled by damage_multiplier.
-    damage_multiplier: fraction of the weapon's damage line the proc deals.
-    default_enemies_hit: assumed average enemies caught per proc (AoE). The
-        softest number in the model; answers surface it as an assumption and
-        let callers override it.
-    damage_source: "companion_ranged_stats" — spawn-projectiles-on-hit; the
-        proc's own damage line lives on the effect's weapon_stats companion.
+Model schema, keyed by effect `key` — dispatch is on damage_source:
+    "weapon_damage" — the proc re-deals the weapon's own damage line
+        (base + scaling). Fields: damage_multiplier (fraction of the
+        weapon's line the proc deals), default_enemies_hit (assumed average
+        enemies caught per proc — the softest number in the model; answers
+        surface it as an assumption and let callers override it).
+    "burn_dot" — damage-over-time proc; per-weapon numbers come from the
+        effect's burning_data companion. Fields: tick_interval (engine
+        constant, seconds).
+    "companion_ranged_stats" — spawn-projectiles-on-hit; the proc's own
+        damage line lives on the effect's weapon_stats companion. No model
+        fields — per-weapon numbers come from the companion, and the
+        enemies-hit policy lives in builders/weapons.py.
 """
 
 from __future__ import annotations

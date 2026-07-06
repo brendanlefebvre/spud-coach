@@ -72,6 +72,17 @@ def test_structure_metadata_reads_stats_companion():
                      "structure_scaling_stats": [["stat_engineering", 1.0]]}
 
 
+def test_structure_turret_sentinel_falls_back_to_stats_cooldown():
+    # Spawning turrets (Pruner garden) ship spawn_cooldown = -1; the real
+    # cadence is the companion stats' cooldown (frames).
+    entry = classify_effect({"key": "", "value": 1, "spawn_cooldown": -1,
+                             "script": "turret_effect.gd",
+                             "stats": {"cooldown": 840, "damage": 0,
+                                       "scaling_stats": []}})
+    assert entry["spawn_cooldown"] == 840
+    assert entry["structure_damage"] == 0
+
+
 def test_unknown_effect_is_not_classified():
     assert classify_effect({"key": "effect_burning", "script": "burning_effect.gd"}) is None
     assert classify_effect({"key": "", "script": "mystery_effect.gd"}) is None
