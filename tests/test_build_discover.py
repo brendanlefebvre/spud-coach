@@ -241,3 +241,25 @@ def test_find_weapon_dirs_main_data_glob_skips_burning_data_companion(tmp_path):
     assert len(found) == 1
     assert found[0]["data_path"].endswith("torch_data.tres")
     assert not found[0]["data_path"].endswith("torch_burning_data.tres")
+
+
+def test_find_enemy_dirs(tmp_path):
+    import os
+
+    from brotato_coach.builders import discover
+
+    root = tmp_path
+    d = root / "entities" / "units" / "enemies" / "baby_alien"
+    d.mkdir(parents=True)
+    (d / "baby_alien_stats.tres").write_text("[resource]\nhealth = 3\n", encoding="utf-8")
+    (d / "baby_alien.tscn").write_text("[gd_scene]\n", encoding="utf-8")
+    # a non-enemy sibling dir with no *_stats.tres must be skipped
+    (root / "entities" / "units" / "enemies" / "attack_behaviors").mkdir()
+
+    found = discover.find_enemy_dirs(str(root))
+    assert len(found) == 1
+    e = found[0]
+    assert e["enemy_id"] == "baby_alien"
+    assert e["name"] == "Baby Alien"
+    assert os.path.basename(e["stats_path"]) == "baby_alien_stats.tres"
+    assert os.path.basename(e["scene_path"]) == "baby_alien.tscn"

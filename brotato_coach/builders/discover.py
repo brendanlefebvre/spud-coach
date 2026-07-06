@@ -194,3 +194,24 @@ def find_set_dirs(extracted_root: str) -> list[dict]:
             "set_data_path": set_data, "count_effect_paths": count_effects,
         })
     return results
+
+
+def find_enemy_dirs(extracted_root: str) -> list[dict]:
+    results = []
+    base = os.path.join(extracted_root, "entities", "units", "enemies")
+    for d in sorted(glob.glob(os.path.join(base, "*"))):
+        if not os.path.isdir(d):
+            continue
+        folder = os.path.basename(d)
+        stats = glob.glob(os.path.join(d, "*_stats.tres"))
+        if not stats:
+            continue
+        scene = os.path.join(d, f"{folder}.tscn")
+        results.append({
+            "enemy_id": folder,
+            "name": _title(folder),
+            "folder": folder,
+            "stats_path": stats[0],
+            "scene_path": scene if os.path.isfile(scene) else None,
+        })
+    return results
