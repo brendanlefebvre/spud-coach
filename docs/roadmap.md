@@ -12,30 +12,12 @@ classified — `unmodeled_effects` is empty dataset-wide; 9-category
 `classified_effects` with metadata like Vorpal's execute chance), loadout
 set-bonus reasoning, the complete 16-stat mechanics table (incl. the
 `stat_range` projectile-speed nuance), localized names/effect text (dataset
-schema v2), run-save ingestion (`evaluate_run` post-mortem tool), the PyPI
-release (`uvx spudcoach`, latest tagged **v0.10.0**), and the official MCP
-registry listing.
-
-On `main`, merged but not yet in a tagged/PyPI release (v0.10.0 predates it):
-
-- **Bestiary awareness** — enemy records (base stats + per-wave scaling
-  slopes + attack profile + ability tags) and base-game (Crash Zone /
-  `zone_1`) per-wave spawn composition, exposed via `get_enemy`,
-  `list_enemies`, and `wave_composition`, plus a `wave_context` section in the
-  `evaluate_run` post-mortem (dataset **schema v4**). Base-game Zone 1 only;
-  bosses are records with a `bespoke_kit_not_modeled` flag. Honesty envelope:
-  exact stats/base composition, run-dependent counts and elite/horde presence
-  labelled as run-variance. Spec/plan under `docs/superpowers/`.
-
-## Ship (in progress)
-
-- **Cut the next release** — bump the package version off `v0.10.0` and
-  tag/publish so PyPI ships the bestiary layer + dataset schema v4 (the
-  current tag predates the bestiary merge).
-- **Finish publish checklist** — spudcoach.fyi install page and an
-  awesome-mcp-servers entry. Checklist: Phase C of
-  `docs/superpowers/plans/2026-07-02-roadmap-implementation.md` (each step
-  needs an explicit go-ahead).
+schema v2), run-save ingestion (`evaluate_run` post-mortem tool),
+**bestiary awareness** (enemy records with per-wave stat scaling, attack
+profile, and ability tags; base-game Crash Zone per-wave spawn composition
+via `get_enemy` / `list_enemies` / `wave_composition`; and a `wave_context`
+section in `evaluate_run` — dataset **schema v4**), the PyPI release
+(`uvx spudcoach`, latest **v0.11.0**), and the official MCP registry listing.
 
 ## Bigger build
 
