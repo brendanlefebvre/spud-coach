@@ -22,9 +22,13 @@ def cooldown_jitter(cooldown_basis_frames: float, weapon_count: int) -> tuple[fl
     """Per-shot cooldown range (frames) from the engine's anti-sync randomization.
 
     Each shot draws cooldown uniformly from [max(1, basis - Δ), basis + Δ],
-    Δ = min(N·basis/5, N·5), N = min(weapon_count, 6) (weapon.gd:337-354). The
-    spread grows with weapon count, de-synchronizing volleys. Mean = basis, so
-    expected DPS is unaffected.
+    Δ = min(N·basis/5, N·5), N = min(max(weapon_count, 1), 6) (weapon.gd:337-354).
+    The spread grows with weapon count, de-synchronizing volleys. The mean equals
+    basis EXCEPT when the low bound floors at 1 (basis - Δ < 1 — fast weapons at
+    high weapon counts): there the mean skews above basis, so those weapons fire
+    slightly slower than basis implies and nominal DPS modestly overstates them.
+    The coach's cycle_time uses raw basis and does not model this skew (see
+    docs/roadmap.md).
     """
     n = min(max(weapon_count, 1), 6)
     delta = min(n * cooldown_basis_frames / 5.0, n * 5.0)
