@@ -51,8 +51,12 @@ for slow weapons, and fully source-derived.
 
 - No change to any `dps`, `dps_at_zero_rd`, `dps_slope_per_rd`, or proc-line value.
 - No change to ranking sort order (still DPS-descending).
-- No dataset rebuild or schema-version bump. Every input already exists in
-  `data/brotato.json`.
+- No schema-version bump. The core cadence metrics need **no rebuild** — every input
+  (`cycle_time`, `cooldown`, `nb_projectiles`, dps line) already exists in
+  `data/brotato.json`. The only additive change is one backward-compatible boolean field,
+  `burst_reload`, on the weapon record (for the bimodal caveat marker); it defaults to
+  `False` when absent, so old datasets keep working and only a local rebuild is needed to
+  populate it on Revolver/Chain Gun.
 - No cross-weapon synchronization / loadout-superposition metric (deferred; see roadmap
   amendment).
 - Crit remains unmodeled (unchanged, out of scope).
@@ -93,11 +97,19 @@ Each response gains a `cadence` sub-object; existing DPS fields are untouched.
 - **`answers.weapon_dps`** and **`answers.compare_weapons`**: add `cadence` via
   `cadence_profile`. Both accept an optional `weapon_count` (default `1`) feeding the jitter
   range; documented that `gap_range_s` widens with loadout size.
-- **`evaluate.evaluate_run`**: ranking rows gain the same `cadence` fields, computed at the
-  run's **actual** weapon count, so `gap_range_s` is real. Sort stays DPS-descending;
-  cadence is descriptive only.
-- **`server.py` / `schemas.py`**: extend the affected tool output schemas with the
-  `cadence` object.
+- **`answers.evaluate_run`** (in `answers.py`, not `evaluate.py`): its ranking is produced
+  by *calling* `compare_weapons` (`answers.py:173`), so threading a `weapon_count` through
+  `compare_weapons` automatically feeds the run's ranking. `evaluate_run` passes
+  `weapon_count = len(build["weapons"])`, so `gap_range_s` is real. Sort stays
+  DPS-descending; cadence is descriptive only.
+- **`server.py`**: the tools are thin wrappers whose outputs are documented by docstring
+  (there is no formal output schema; `schemas.py` holds only the input `Stats` model). Add
+  an optional `weapon_count: int = 1` param to the `weapon_dps` and `compare_weapons` tools
+  and describe the new `cadence` object in their docstrings.
+
+**Graceful degradation.** `cadence` is attached only when the record has `cycle_time > 0`
+(always true for real weapon records; keeps minimal test fixtures and any non-weapon record
+from breaking). When absent, output is exactly as today.
 
 ## Known caveat (surfaced, not hidden)
 
@@ -139,10 +151,12 @@ separate Revolver-tier-3 case to pin the bimodal caveat.
 ## Files touched
 
 - `brotato_coach/calc.py` — new primitives.
-- `brotato_coach/answers.py` — `weapon_dps`, `compare_weapons`.
-- `brotato_coach/evaluate.py` — `evaluate_run` ranking rows.
+- `brotato_coach/answers.py` — `weapon_dps`, `compare_weapons`, and `evaluate_run` (threads
+  `weapon_count`).
 - `brotato_coach/orientation.py` — primer caveat rewrite.
-- `brotato_coach/server.py`, `brotato_coach/schemas.py` — tool output schemas.
+- `brotato_coach/server.py` — `weapon_count` param + docstring updates on the `weapon_dps`
+  and `compare_weapons` tools.
 - `docs/cadence-mechanics.md` — new.
 - `docs/roadmap.md` — amend the loadout-timing entry.
-- `tests/` — new cadence tests.
+- `tests/test_calc.py`, `tests/test_answers.py`, `tests/test_orientation.py` — new cadence
+  tests.
