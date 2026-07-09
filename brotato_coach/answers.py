@@ -25,7 +25,8 @@ def display_stats(ds: dict, character: str, raw_stats: dict) -> dict:
 
 
 def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
-               aoe_enemies_hit: float = 1.0, character: str | None = None) -> dict:
+               aoe_enemies_hit: float = 1.0, character: str | None = None,
+               weapon_count: int = 1) -> dict:
     rec = query.get_weapon(ds, name, tier=tier)
     if "id" not in rec:
         return rec
@@ -35,7 +36,7 @@ def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
     base = calc.dps_at(rec["dps_at_zero_rd"], rec["dps_slope_per_rd"], rd)
     proc = aoe_enemies_hit * calc.dps_at(rec.get("proc_dps_at_zero_rd", 0.0),
                                          rec.get("proc_dps_slope_per_rd", 0.0), rd)
-    return {
+    result = {
         "name": rec["name"], "tier": tier, "ranged_damage": rd,
         "dps": base + proc, "base_dps": base, "proc_dps": proc,
         "unmodeled_effects": rec.get("unmodeled_effects", []),
@@ -47,6 +48,13 @@ def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
             "aoe_enemies_hit": aoe_enemies_hit,
         },
     }
+    ct = float(rec.get("cycle_time", 0.0) or 0.0)
+    if ct > 0:
+        result["cadence"] = calc.cadence_profile(
+            ct, base + proc, float(rec.get("cooldown", 0.0)),
+            weapon_count=weapon_count,
+            burst_reload=bool(rec.get("burst_reload", False)))
+    return result
 
 
 def compare_weapons(ds: dict, names_with_tiers: list, stats: dict,
