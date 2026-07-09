@@ -18,6 +18,19 @@ def cycle_time(recoil_duration: float, cooldown: float,
     return ct
 
 
+def cooldown_jitter(cooldown_basis_frames: float, weapon_count: int) -> tuple[float, float]:
+    """Per-shot cooldown range (frames) from the engine's anti-sync randomization.
+
+    Each shot draws cooldown uniformly from [max(1, basis - Δ), basis + Δ],
+    Δ = min(N·basis/5, N·5), N = min(weapon_count, 6) (weapon.gd:337-354). The
+    spread grows with weapon count, de-synchronizing volleys. Mean = basis, so
+    expected DPS is unaffected.
+    """
+    n = min(max(weapon_count, 1), 6)
+    delta = min(n * cooldown_basis_frames / 5.0, n * 5.0)
+    return (max(1.0, cooldown_basis_frames - delta), cooldown_basis_frames + delta)
+
+
 def dps_line(base_damage: float, scaling_coef: float, cycle_time: float,
              accuracy: float) -> tuple[float, float]:
     dps0 = base_damage / cycle_time * accuracy

@@ -104,3 +104,28 @@ def test_companion_dps_line_zero_count_is_zero():
     dps0, slope = calc.companion_dps_line(10.0, 1.0, 1.0, 0.0, 1.0)
     assert dps0 == 0.0
     assert slope == 0.0
+
+
+def test_cooldown_jitter_slow_weapon_single():
+    # Shredder-like basis 45 frames, N=1: delta=min(45/5, 5)=5 -> [40, 50]
+    lo, hi = calc.cooldown_jitter(45, 1)
+    assert math.isclose(lo, 40.0)
+    assert math.isclose(hi, 50.0)
+
+
+def test_cooldown_jitter_slow_weapon_six_weapons():
+    # basis 45, N=6: delta=min(6*45/5=54, 6*5=30)=30 -> [15, 75]
+    lo, hi = calc.cooldown_jitter(45, 6)
+    assert math.isclose(lo, 15.0)
+    assert math.isclose(hi, 75.0)
+
+
+def test_cooldown_jitter_fast_weapon_floors_at_one():
+    # Minigun-like basis 3, N=6: delta=min(3.6, 30)=3.6; basis-delta=-0.6 -> floored to 1
+    lo, hi = calc.cooldown_jitter(3, 6)
+    assert math.isclose(lo, 1.0)
+    assert math.isclose(hi, 6.6)
+
+
+def test_cooldown_jitter_clamps_weapon_count_to_six():
+    assert calc.cooldown_jitter(45, 99) == calc.cooldown_jitter(45, 6)
