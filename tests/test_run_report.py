@@ -7,9 +7,11 @@ from brotato_coach.runfile import godot_string_hash
 DS = {
     "weapons": [
         {"id": "weapon_smg", "name": "SMG", "tier": 1, "sets": ["Gun"],
-         "dps_at_zero_rd": 10.0, "dps_slope_per_rd": 1.0, "scaling_stats": []},
+         "dps_at_zero_rd": 10.0, "dps_slope_per_rd": 1.0,
+         "cycle_time": 0.3, "cooldown": 12, "scaling_stats": []},
         {"id": "weapon_pistol", "name": "Pistol", "tier": 1, "sets": ["Gun"],
-         "dps_at_zero_rd": 5.0, "dps_slope_per_rd": 0.5, "scaling_stats": []},
+         "dps_at_zero_rd": 5.0, "dps_slope_per_rd": 0.5,
+         "cycle_time": 0.6, "cooldown": 30, "scaling_stats": []},
     ],
     "items": [
         {"id": "item_dynamite", "name": "Dynamite", "tags": ["explosive"],
@@ -177,3 +179,14 @@ def test_evaluate_run_wave_context_skip_note_outside_base_game_range():
     assert wc["death_wave"] == 25
     assert "note" in wc
     assert "composition" not in wc
+
+
+def test_evaluate_run_ranking_has_cadence_at_loadout_count():
+    report = answers.evaluate_run(DS, _run())
+    ranking = report["weapon_dps_ranking"]
+    assert all("cadence" in row for row in ranking)
+    # Two weapons in the loadout -> jitter computed at N=2, not N=1.
+    smg = next(r for r in ranking if r["name"] == "SMG")
+    n1 = answers.compare_weapons(
+        DS, [("SMG", 1)], {"ranged_damage": 8}, weapon_count=1)["ranking"][0]
+    assert smg["cadence"]["gap_range_s"] != n1["cadence"]["gap_range_s"]

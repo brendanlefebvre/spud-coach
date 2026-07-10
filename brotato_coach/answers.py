@@ -184,7 +184,8 @@ def evaluate_run(ds: dict, run: dict) -> dict:
     stats = display_stats(ds, build["character"], build["stats"])
 
     ranking = compare_weapons(
-        ds, [(w["id"], w["tier"]) for w in build["weapons"]], stats)["ranking"]
+        ds, [(w["id"], w["tier"]) for w in build["weapons"]], stats,
+        weapon_count=len(build["weapons"]))["ranking"]
 
     weapon_ids = [w["id"] for w in build["weapons"]]
     set_bonuses = loadout_set_bonuses(ds, weapon_ids)
