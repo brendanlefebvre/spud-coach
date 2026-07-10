@@ -33,18 +33,24 @@ section in `evaluate_run` — dataset **schema v4**), the PyPI release
   provenance so horde/elite/endless-only enemies carry a label instead of an
   empty list. Deferred test-hardening minors are logged in the bestiary
   implementation plan/review notes.
-- **Loadout timing/consistency modeling** — player-reported (2026-07-08, not
-  yet source-verified): a loadout of similar-`cycle_time` weapons (e.g.
-  several copies of the same weapon) tends to volley in near-unison, dealing
-  damage in bursts with a shared dead window between; a loadout with
-  staggered `cycle_time`s interleaves attacks for steadier output. Two
-  loadouts with identical summed DPS can play very differently, and
-  `weapon_dps`/`compare_weapons`/`evaluate_run` currently rank by summed DPS
-  alone (see the `read_me` primer's "Attack-timing synchronization is NOT
-  modeled" caveat). Possible shape for a future metric: something like a
-  variance/spread measure over equipped weapons' `cycle_time` (all weapon
-  records already carry it), surfaced as a loadout-level "damage
-  consistency" or "synchronization risk" score alongside the DPS ranking —
-  needs a source-verified model of how per-weapon attack timers actually
-  interact (do they start staggered, sync on reload, etc.) before it can be
-  more than a heuristic.
+- **Loadout timing/consistency modeling** — the 2026-07-08 player-reported
+  hypothesis (similar-`cycle_time` weapons volley in near-unison; propose a
+  cycle_time-spread "synchronization risk" score) is **refuted by source**:
+  the engine randomizes each shot's cooldown with jitter that grows with
+  weapon count, deliberately de-syncing volleys (`weapon.gd:337-354`; see
+  `docs/cadence-mechanics.md`). A spread heuristic would advise backwards.
+  Per-weapon cadence shipped 2026-07-09 (attacks_per_second, damage_per_attack,
+  cadence label, verified gap_range_s). A genuine loadout-level metric would
+  require statistically superposing N independent randomized cooldown streams
+  (expected fraction of time with zero weapons firing / longest expected gap)
+  — a Monte-Carlo estimate, not a spread heuristic — and remains a possible
+  future item if demand appears.
+- **Cooldown floor-skew (nominal DPS overstates fast multi-weapon builds)** —
+  the per-shot cooldown is drawn from `rand_range(max(1, basis - Δ), basis + Δ)`
+  (`weapon.gd:337-349`). When `basis - Δ < 1` the low bound floors at 1, skewing
+  the mean cooldown above basis, so the weapon fires slightly slower than basis
+  implies. This binds for fast weapons at high weapon counts (e.g. 6x Minigun,
+  basis 3 -> mean 3.8, ~13% slower). The coach's `cycle_time`/DPS use raw basis
+  and do not model this, so nominal DPS modestly overstates those builds. Small
+  and situational; a corrected effective-cooldown model could fold `E[cooldown]
+  = (1 + basis + Δ)/2` in the floor-binding regime if it proves to matter.
