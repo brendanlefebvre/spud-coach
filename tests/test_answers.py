@@ -208,3 +208,15 @@ def test_weapon_dps_omits_cadence_when_cycle_time_absent():
     result = answers.weapon_dps(DS, "Laser", 2, {"ranged_damage": 0})
     assert "cadence" not in result
     assert math.isclose(result["dps"], 30.0, rel_tol=1e-4)
+
+
+def test_compare_weapons_rows_carry_cadence():
+    result = answers.compare_weapons(
+        DS, [("Minigun", 4), ("Laser", 2)], {"ranged_damage": 0}, weapon_count=2)
+    rows = {r["name"]: r for r in result["ranking"]}
+    # Minigun fixture has cycle_time -> cadence present
+    assert rows["Minigun"]["cadence"]["cadence"] == "sustained"
+    # Laser fixture lacks cycle_time -> no cadence key, but still ranked
+    assert "cadence" not in rows["Laser"]
+    # Sort order still DPS-descending, unchanged
+    assert result["ranking"][0]["name"] == "Minigun"

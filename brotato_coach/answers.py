@@ -58,16 +58,21 @@ def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
 
 
 def compare_weapons(ds: dict, names_with_tiers: list, stats: dict,
-                    aoe_enemies_hit: float = 1.0, character: str | None = None) -> dict:
+                    aoe_enemies_hit: float = 1.0, character: str | None = None,
+                    weapon_count: int = 1) -> dict:
     if character is not None:
         stats = display_stats(ds, character, stats)
     rows = []
     for name, tier in names_with_tiers:
-        r = weapon_dps(ds, name, tier, stats, aoe_enemies_hit)
+        r = weapon_dps(ds, name, tier, stats, aoe_enemies_hit,
+                       weapon_count=weapon_count)
         if "dps" in r:
-            rows.append({"name": r["name"], "tier": tier, "dps": r["dps"],
-                         "base_dps": r["base_dps"], "proc_dps": r["proc_dps"],
-                         "unmodeled_effects": r["unmodeled_effects"]})
+            row = {"name": r["name"], "tier": tier, "dps": r["dps"],
+                   "base_dps": r["base_dps"], "proc_dps": r["proc_dps"],
+                   "unmodeled_effects": r["unmodeled_effects"]}
+            if "cadence" in r:
+                row["cadence"] = r["cadence"]
+            rows.append(row)
     rows.sort(key=lambda x: x["dps"], reverse=True)
     return {"ranking": rows}
 
