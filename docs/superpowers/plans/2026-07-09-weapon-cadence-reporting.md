@@ -745,7 +745,7 @@ basis and does not model this floor-skew (see the roadmap).
 
 ## Known limitation: burst-reload weapons
 
-Revolver (every 6 shots, tiers 2-4) and Chain Gun (every 100, tier 4) — the
+Revolver (every 6 shots, all tiers) and Chain Gun (every 100, tier 4) — the
 only base-game weapons with `additional_cooldown_every_x_shots` set — have a
 bimodal cadence (fast, then a long reload). `cycle_time` amortizes the reload,
 so `attacks_per_second` is an average, not the felt rhythm; `burst_reload:

@@ -119,9 +119,9 @@ from breaking). When absent, output is exactly as today.
 
 Burst-reload weapons (`additional_cooldown_every_x_shots ≠ -1`) have a **bimodal** cadence
 (fast-fast-fast-LONG reload) that the averaged `cycle_time` smooths over.
-`attacks_per_second` reports the average, not the felt rhythm. This property is
-**tier-gated**, and only two weapons have it in the base game: **Revolver** (every 6 shots,
-tiers 2–4 — tier 1 is a normal weapon) and **Chain Gun** (every 100 shots, tier 4 only).
+`attacks_per_second` reports the average, not the felt rhythm. Only two weapons have it in
+the base game (verified against `extracted/`): **Revolver** (every 6 shots, **all tiers
+1–4**) and **Chain Gun** (every 100 shots, **tier 4 only** — so this one is tier-gated).
 Flagged explicitly in the `cadence` output (e.g. a `burst_reload: true` marker) and in
 `docs/cadence-mechanics.md` so it does not read as fully modeled. The two hand-verified test
 weapons (fast vs slow) should be *non*-burst weapons to keep the invariant clean; add a
