@@ -16,8 +16,11 @@ schema v2), run-save ingestion (`evaluate_run` post-mortem tool),
 **bestiary awareness** (enemy records with per-wave stat scaling, attack
 profile, and ability tags; base-game Crash Zone per-wave spawn composition
 via `get_enemy` / `list_enemies` / `wave_composition`; and a `wave_context`
-section in `evaluate_run` — dataset **schema v4**), the PyPI release
-(`uvx spudcoach`, latest **v0.11.0**), and the official MCP registry listing.
+section in `evaluate_run` — dataset **schema v4**), **per-weapon cadence
+reporting** (verified `cooldown_jitter` model — attacks/sec, damage/attack,
+cadence label, and gap range surfaced on `weapon_dps`, `compare_weapons`, and
+`evaluate_run`, with burst-reload weapons flagged), the PyPI release
+(`uvx spudcoach`, latest **v0.12.0**), and the official MCP registry listing.
 
 ## Bigger build
 

@@ -1,6 +1,6 @@
 # Brotato Coach
 
-<!-- mcp-name: io.github.BrendanL79/spudcoach -->
+<!-- mcp-name: io.github.brendanlefebvre/spudcoach -->
 
 A deterministic theorycrafter for [Brotato](https://store.steampowered.com/app/1942280/Brotato/),
 delivered as an MCP server you can chat with from Claude Code (and other MCP clients).
@@ -114,7 +114,7 @@ distributed.
        "spud-coach": {
          "command": "uvx",
          "args": [
-           "--from", "git+https://github.com/BrendanL79/spud-coach",
+           "--from", "git+https://github.com/brendanlefebvre/spud-coach",
            "spudcoach",
            "--data", "C:\\Users\\<you>\\path\\to\\brotato.json"
          ]
@@ -140,7 +140,7 @@ for the same reason. Two fixes:
   works, then use `--from <folder>` instead of `--from git+…`:
 
   ```powershell
-  git clone https://github.com/BrendanL79/spud-coach C:\Users\<you>\src\spud-coach
+  git clone https://github.com/brendanlefebvre/spud-coach C:\Users\<you>\src\spud-coach
   ```
   ```json
   {
