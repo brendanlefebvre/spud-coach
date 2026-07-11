@@ -187,6 +187,9 @@ def test_evaluate_run_ranking_has_cadence_at_loadout_count():
     assert all("cadence" in row for row in ranking)
     # Two weapons in the loadout -> jitter computed at N=2, not N=1.
     smg = next(r for r in ranking if r["name"] == "SMG")
+    # gap_range_s depends only on cycle_time/cooldown/weapon_count, not on
+    # ranged_damage, so the stats here are immaterial — the difference below
+    # isolates the N=2 (loadout) vs N=1 jitter, nothing else.
     n1 = answers.compare_weapons(
         DS, [("SMG", 1)], {"ranged_damage": 8}, weapon_count=1)["ranking"][0]
     assert smg["cadence"]["gap_range_s"] != n1["cadence"]["gap_range_s"]

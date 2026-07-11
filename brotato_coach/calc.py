@@ -32,7 +32,10 @@ def cooldown_jitter(cooldown_basis_frames: float, weapon_count: int) -> tuple[fl
     """
     n = min(max(weapon_count, 1), 6)
     delta = min(n * cooldown_basis_frames / 5.0, n * 5.0)
-    return (max(1.0, cooldown_basis_frames - delta), cooldown_basis_frames + delta)
+    lo = max(1.0, cooldown_basis_frames - delta)
+    # Clamp hi >= lo so the degenerate basis < 1 case (no base-game weapon has
+    # a sub-1-frame cooldown) can't return an inverted range.
+    return (lo, max(lo, cooldown_basis_frames + delta))
 
 
 def cadence_profile(cycle_time: float, total_dps: float,
@@ -48,6 +51,9 @@ def cadence_profile(cycle_time: float, total_dps: float,
     """
     aps = 1.0 / cycle_time
     lo_f, hi_f = cooldown_jitter(cooldown_basis_frames, weapon_count)
+    # gap_range_s builds on cycle_time, which for burst-reload weapons already
+    # amortizes the long reload — so their range is average-based, not the felt
+    # fast-then-reload rhythm (flagged via burst_reload; see docs/cadence-mechanics.md).
     recoil_term = cycle_time - cooldown_basis_frames / 60.0
     if aps >= 3.0:
         label = "sustained"

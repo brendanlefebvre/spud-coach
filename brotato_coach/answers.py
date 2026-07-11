@@ -36,9 +36,10 @@ def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
     base = calc.dps_at(rec["dps_at_zero_rd"], rec["dps_slope_per_rd"], rd)
     proc = aoe_enemies_hit * calc.dps_at(rec.get("proc_dps_at_zero_rd", 0.0),
                                          rec.get("proc_dps_slope_per_rd", 0.0), rd)
+    total = base + proc
     result = {
         "name": rec["name"], "tier": tier, "ranged_damage": rd,
-        "dps": base + proc, "base_dps": base, "proc_dps": proc,
+        "dps": total, "base_dps": base, "proc_dps": proc,
         "unmodeled_effects": rec.get("unmodeled_effects", []),
         "breakdown": {
             "dps_at_zero_rd": rec["dps_at_zero_rd"],
@@ -51,7 +52,7 @@ def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
     ct = float(rec.get("cycle_time", 0.0) or 0.0)
     if ct > 0:
         result["cadence"] = calc.cadence_profile(
-            ct, base + proc, float(rec.get("cooldown", 0.0)),
+            ct, total, float(rec.get("cooldown", 0.0)),
             weapon_count=weapon_count,
             burst_reload=bool(rec.get("burst_reload", False)))
     return result

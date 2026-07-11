@@ -131,6 +131,14 @@ def test_cooldown_jitter_clamps_weapon_count_to_six():
     assert calc.cooldown_jitter(45, 99) == calc.cooldown_jitter(45, 6)
 
 
+def test_cooldown_jitter_degenerate_basis_never_inverts():
+    # No base-game weapon has a sub-1-frame cooldown, but a basis < 1 must not
+    # yield an inverted (lo > hi) range once the low bound floors at 1.
+    lo, hi = calc.cooldown_jitter(0, 6)
+    assert lo <= hi
+    assert lo == 1.0
+
+
 def test_cadence_profile_minigun_sustained():
     # Minigun T4: cycle 0.09s, total_dps 55.5556 at rd0, basis 3 frames
     p = calc.cadence_profile(0.09, 55.5556, 3, weapon_count=1)
