@@ -5,7 +5,8 @@ from brotato_coach import answers
 DS = {
     "weapons": [
         {"id": "weapon_minigun", "name": "Minigun", "tier": 4,
-         "dps_at_zero_rd": 55.5556, "dps_slope_per_rd": 8.3333, "scaling_stats": []},
+         "dps_at_zero_rd": 55.5556, "dps_slope_per_rd": 8.3333,
+         "cycle_time": 0.09, "cooldown": 3, "scaling_stats": []},
         {"id": "weapon_revolver", "name": "Revolver", "tier": 4,
          "dps_at_zero_rd": 57.35, "dps_slope_per_rd": 2.8673, "scaling_stats": []},
         {"id": "weapon_laser", "name": "Laser", "tier": 2,
@@ -190,3 +191,32 @@ def test_loadout_set_bonuses_unknown_weapon_suggested():
     assert result["classes"] == []
     assert result["unknown_weapons"][0]["name"] == "Knifee"
     assert "Knife" in result["unknown_weapons"][0]["did_you_mean"]
+
+
+def test_weapon_dps_includes_cadence_when_cycle_time_present():
+    result = answers.weapon_dps(DS, "Minigun", 4, {"ranged_damage": 0})
+    cad = result["cadence"]
+    assert cad["cadence"] == "sustained"
+    assert math.isclose(cad["attacks_per_second"], 1 / 0.09, rel_tol=1e-9)
+    # Invariant holds against the report's own dps
+    assert math.isclose(
+        cad["damage_per_attack"] * cad["attacks_per_second"], result["dps"], rel_tol=1e-9)
+
+
+def test_weapon_dps_omits_cadence_when_cycle_time_absent():
+    # Laser T2 fixture has no cycle_time -> no cadence, dps unchanged
+    result = answers.weapon_dps(DS, "Laser", 2, {"ranged_damage": 0})
+    assert "cadence" not in result
+    assert math.isclose(result["dps"], 30.0, rel_tol=1e-4)
+
+
+def test_compare_weapons_rows_carry_cadence():
+    result = answers.compare_weapons(
+        DS, [("Minigun", 4), ("Laser", 2)], {"ranged_damage": 0}, weapon_count=2)
+    rows = {r["name"]: r for r in result["ranking"]}
+    # Minigun fixture has cycle_time -> cadence present
+    assert rows["Minigun"]["cadence"]["cadence"] == "sustained"
+    # Laser fixture lacks cycle_time -> no cadence key, but still ranked
+    assert "cadence" not in rows["Laser"]
+    # Sort order still DPS-descending, unchanged
+    assert result["ranking"][0]["name"] == "Minigun"

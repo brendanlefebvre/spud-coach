@@ -66,14 +66,12 @@ def test_read_me_weapon_dps_raw_vs_displayed_contract():
     assert "character" in primer
 
 
-def test_read_me_notes_attack_timing_not_modeled():
+def test_primer_describes_verified_cadence_not_unmodeled_sync():
     primer = orientation.read_me_payload(FAKE_DS)["primer"]
-    # DPS is a steady-state average and says nothing about whether a
-    # loadout's attacks land in synchronized bursts (vulnerability windows)
-    # or interleaved (steadier output) — player-reported, not source-verified.
-    assert "synchroniz" in primer.lower()
-    assert "cycle_time" in primer
-    assert "not source-verified" in primer.lower() or "player-reported" in primer.lower()
+    assert "attacks_per_second" in primer
+    assert "randomizes each shot's cooldown" in primer
+    # The old misleading blanket claim is gone.
+    assert "Attack-timing synchronization is NOT modeled" not in primer
 
 
 def test_read_me_appears_in_nuance():

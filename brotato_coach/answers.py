@@ -25,7 +25,8 @@ def display_stats(ds: dict, character: str, raw_stats: dict) -> dict:
 
 
 def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
-               aoe_enemies_hit: float = 1.0, character: str | None = None) -> dict:
+               aoe_enemies_hit: float = 1.0, character: str | None = None,
+               weapon_count: int = 1) -> dict:
     rec = query.get_weapon(ds, name, tier=tier)
     if "id" not in rec:
         return rec
@@ -35,9 +36,10 @@ def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
     base = calc.dps_at(rec["dps_at_zero_rd"], rec["dps_slope_per_rd"], rd)
     proc = aoe_enemies_hit * calc.dps_at(rec.get("proc_dps_at_zero_rd", 0.0),
                                          rec.get("proc_dps_slope_per_rd", 0.0), rd)
-    return {
+    total = base + proc
+    result = {
         "name": rec["name"], "tier": tier, "ranged_damage": rd,
-        "dps": base + proc, "base_dps": base, "proc_dps": proc,
+        "dps": total, "base_dps": base, "proc_dps": proc,
         "unmodeled_effects": rec.get("unmodeled_effects", []),
         "breakdown": {
             "dps_at_zero_rd": rec["dps_at_zero_rd"],
@@ -47,19 +49,31 @@ def weapon_dps(ds: dict, name: str, tier: int, stats: dict,
             "aoe_enemies_hit": aoe_enemies_hit,
         },
     }
+    ct = float(rec.get("cycle_time", 0.0) or 0.0)
+    if ct > 0:
+        result["cadence"] = calc.cadence_profile(
+            ct, total, float(rec.get("cooldown", 0.0)),
+            weapon_count=weapon_count,
+            burst_reload=bool(rec.get("burst_reload", False)))
+    return result
 
 
 def compare_weapons(ds: dict, names_with_tiers: list, stats: dict,
-                    aoe_enemies_hit: float = 1.0, character: str | None = None) -> dict:
+                    aoe_enemies_hit: float = 1.0, character: str | None = None,
+                    weapon_count: int = 1) -> dict:
     if character is not None:
         stats = display_stats(ds, character, stats)
     rows = []
     for name, tier in names_with_tiers:
-        r = weapon_dps(ds, name, tier, stats, aoe_enemies_hit)
+        r = weapon_dps(ds, name, tier, stats, aoe_enemies_hit,
+                       weapon_count=weapon_count)
         if "dps" in r:
-            rows.append({"name": r["name"], "tier": tier, "dps": r["dps"],
-                         "base_dps": r["base_dps"], "proc_dps": r["proc_dps"],
-                         "unmodeled_effects": r["unmodeled_effects"]})
+            row = {"name": r["name"], "tier": tier, "dps": r["dps"],
+                   "base_dps": r["base_dps"], "proc_dps": r["proc_dps"],
+                   "unmodeled_effects": r["unmodeled_effects"]}
+            if "cadence" in r:
+                row["cadence"] = r["cadence"]
+            rows.append(row)
     rows.sort(key=lambda x: x["dps"], reverse=True)
     return {"ranking": rows}
 
@@ -171,7 +185,8 @@ def evaluate_run(ds: dict, run: dict) -> dict:
     stats = display_stats(ds, build["character"], build["stats"])
 
     ranking = compare_weapons(
-        ds, [(w["id"], w["tier"]) for w in build["weapons"]], stats)["ranking"]
+        ds, [(w["id"], w["tier"]) for w in build["weapons"]], stats,
+        weapon_count=len(build["weapons"]))["ranking"]
 
     weapon_ids = [w["id"] for w in build["weapons"]]
     set_bonuses = loadout_set_bonuses(ds, weapon_ids)
