@@ -57,3 +57,12 @@ cadence label, and gap range surfaced on `weapon_dps`, `compare_weapons`, and
   and do not model this, so nominal DPS modestly overstates those builds. Small
   and situational; a corrected effective-cooldown model could fold `E[cooldown]
   = (1 + basis + Δ)/2` in the floor-binding regime if it proves to matter.
+- **DPS engine beyond ranged damage** — the DPS model is RD-only
+  (`calc.dps_line` + `builders/weapons.py:_rd_coefficient`): it consumes only
+  ranged_damage, ignoring melee / percent / elemental damage scaling. Origin:
+  it was built while grinding Ranger. Consequence: 35 of 36 Precise weapons
+  have a zero RD slope (melee-scaling), so for melee/crit characters like Crazy
+  the `dps(rd)` lines are near-flat constants and class-bonus stats (range,
+  attack-speed, lifesteal) cannot enter the line at all. A stat-aware DPS model
+  would parameterize by the weapon's real scaling stat and fold in flat/percent
+  damage — a larger change that touches every weapon number; its own spec.

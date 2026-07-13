@@ -52,8 +52,8 @@ def _minimal(**over):
     return dataset.assemble_dataset(**base)
 
 
-def test_schema_version_is_4():
-    assert _minimal()["schema_version"] == 4
+def test_schema_version_is_5():
+    assert _minimal()["schema_version"] == 5
 
 
 def test_enemies_and_waves_present_in_output():

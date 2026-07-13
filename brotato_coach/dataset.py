@@ -4,7 +4,7 @@ import json
 
 from brotato_coach.builders.mechanics import STAT_MECHANICS
 
-DATASET_VERSION = 4  # was 3
+DATASET_VERSION = 5  # was 4 (added character class_bonuses)
 
 _REQUIRED_WEAPON_KEYS = ("id", "name", "tier", "dps_slope_per_rd", "dps_at_zero_rd")
 
