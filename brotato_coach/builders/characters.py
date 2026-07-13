@@ -35,6 +35,10 @@ def build_character_record(data_text: str, effect_texts: list[str], *, char_id: 
             stat = mods[0] if mods else None
             if stat is not None:
                 gain_modifiers.append({"stat": stat, "pct": r.get("value", 0)})
+        # A non-empty set_id is the sole discriminator for a ClassBonusEffect
+        # (its .tres always carries set_id + stat_name). The effect key varies
+        # in case across characters (effect_weapon_class_bonus /
+        # EFFECT_WEAPON_CLASS_BONUS), so we deliberately do NOT gate on it.
         elif set_id:
             class_bonuses.append({
                 "set_id": str(set_id),

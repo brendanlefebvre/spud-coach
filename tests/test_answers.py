@@ -254,3 +254,24 @@ def test_character_class_synergy_empty_for_character_without_bonus():
     }
     out = answers.character_class_synergy(ds, "Plain", ["Knife"])
     assert out["bonuses"] == []
+
+
+def test_character_class_synergy_handles_multi_tier_weapon_matches():
+    # A weapon id present at multiple tiers makes query.get_weapon return
+    # {"matches": [...]} rather than a single record. character_class_synergy
+    # takes matches[0] (set membership is tier-independent) — this exercises
+    # that branch, which every real weapon lookup hits in production.
+    ds = {
+        "characters": [
+            {"id": "character_crazy", "name": "Crazy", "class_bonuses": [
+                {"set_id": "set_precise", "set_name": "Precise",
+                 "stat": "max_range", "stat_displayed": "stat_range",
+                 "value": 100}]},
+        ],
+        "weapons": [
+            {"id": "weapon_knife", "name": "Knife", "tier": 1, "sets": ["Precise"]},
+            {"id": "weapon_knife", "name": "Knife", "tier": 2, "sets": ["Precise"]},
+        ],
+    }
+    out = answers.character_class_synergy(ds, "Crazy", ["Knife"])
+    assert out["bonuses"][0]["matched_weapons"] == ["Knife"]
