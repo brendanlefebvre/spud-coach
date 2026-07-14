@@ -4,14 +4,46 @@ from brotato_coach import calc
 from brotato_coach.builders.classifications import classify_effect
 from brotato_coach.builders.localization import resolve_text
 from brotato_coach.builders.procs import PROC_MODELS
-from brotato_coach.tres import parse_tres
+from brotato_coach.schemas import Stats
+from brotato_coach.tres import parse_tres, TresDoc
 
 
-def _rd_coefficient(scaling_stats: list) -> float:
+def _weapon_type(doc: TresDoc) -> str:
+    """"melee"/"ranged" from the stats script ext_resource basename.
+
+    The stats .tres attaches its type-defining script
+    (weapons/weapon_stats/{melee,ranged}_weapon_stats.gd) as an ext_resource
+    referenced by `script = ExtResource(N)`. Fixtures/records with no such
+    ext_resource (most unit-test fixtures, which don't exercise weapon-type
+    behavior) default to "ranged" rather than raising.
+    """
+    for ext in doc.ext_resources.values():
+        path = str(ext.get("path") or "")
+        if path.endswith("weapon_stats.gd"):
+            return "melee" if "melee_weapon_stats" in path else "ranged"
+    return "ranged"
+
+
+def _check_scaling_stat(name: str, weapon_id: str) -> None:
+    """Guard against a scaling-stat name the stat-aware engine can't map.
+
+    Mirrors calc.stat_value's own resolution rules exactly (stat_levels,
+    calc._SHORT_BY_STAT_NAME's irregular short names, or a stat_* name whose
+    removeprefix("stat_") is a real Stats field) so a build fails loudly
+    instead of the engine silently reading 0.0 for an unmapped stat at
+    query time.
+    """
+    if name == "stat_levels" or name in calc._SHORT_BY_STAT_NAME:
+        return
+    if name.removeprefix("stat_") in Stats.model_fields:
+        return
+    raise ValueError(f"unknown scaling stat {name!r} on {weapon_id}")
+
+
+def _validate_scaling_stats(scaling_stats: list, weapon_id: str) -> None:
     for entry in scaling_stats or []:
-        if isinstance(entry, list) and len(entry) == 2 and entry[0] == "stat_ranged_damage":
-            return float(entry[1])
-    return 0.0
+        if isinstance(entry, list) and entry:
+            _check_scaling_stat(str(entry[0]), weapon_id)
 
 
 def _weapon_effect_record(text: str, companion_texts: dict[str, str] | None = None) -> dict:
@@ -51,50 +83,62 @@ def build_weapon_record(stats_text: str, data_text: str,
                         classes: list[str] | None = None,
                         proc_models: dict | None = None,
                         tr: dict[str, str] | None = None) -> dict:
-    s = parse_tres(stats_text).resource
+    stats_doc = parse_tres(stats_text)
+    s = stats_doc.resource
     d = parse_tres(data_text).resource
 
+    weapon_type = _weapon_type(stats_doc)
     cooldown = float(s.get("cooldown", 0))
     recoil_duration = float(s.get("recoil_duration", 0.0))
     base_damage = float(s.get("damage", 0))
     accuracy = float(s.get("accuracy", 1.0))
+    max_range = float(s.get("max_range", 0.0))
+    attack_speed_mod = float(s.get("attack_speed_mod", 0.0))
     scaling_stats = s.get("scaling_stats", []) or []
+    _validate_scaling_stats(scaling_stats, weapon_id)
 
-    burst = None
     every = s.get("additional_cooldown_every_x_shots", -1)
     mult = s.get("additional_cooldown_multiplier", -1.0)
+    burst = None
     if isinstance(every, int) and every > 0 and isinstance(mult, (int, float)) and mult > 0:
         burst = (every, float(mult))
-
-    ct = calc.cycle_time(recoil_duration, cooldown, burst=burst)
-    dps0, slope = calc.dps_line(base_damage, _rd_coefficient(scaling_stats), ct, accuracy)
 
     companions = effect_companion_texts or [None] * len(effect_texts or [])
     effects = [_weapon_effect_record(t, c)
                for t, c in zip(effect_texts or [], companions, strict=True)]
     models = PROC_MODELS if proc_models is None else proc_models
-    proc0 = proc_slope = 0.0
+    proc_effects: list[dict] = []
     unmodeled: list[str] = []
     classified: list[dict] = []
     for eff in effects:
         model = models.get(str(eff.get("key", "")))
         source = model["damage_source"] if model is not None else None
         if source == "weapon_damage":
-            p0, ps = calc.proc_line(dps0, slope, float(eff.get("chance", 1.0)),
-                                    model["default_enemies_hit"],
-                                    model["damage_multiplier"])
-            proc0 += p0
-            proc_slope += ps
+            proc_effects.append({
+                "kind": "weapon_damage",
+                "chance": float(eff.get("chance", 1.0)),
+                "enemies_hit": model["default_enemies_hit"],
+                "multiplier": model["damage_multiplier"],
+            })
         elif source == "burn_dot":
             bd = eff.get("burning_data") or {}
             chance = float(bd.get("chance", 0.0))
             damage = bd.get("damage")
             duration = float(bd.get("duration", 0))
             window = duration * model["tick_interval"]
-            if chance == 1.0 and damage is not None and window > 0 and ct <= window:
-                p0, ps = calc.burn_dps_line(float(damage), model["tick_interval"])
-                proc0 += p0
-                proc_slope += ps
+            ct_zero_as = calc.stat_aware_cycle_time(
+                weapon_type=weapon_type, recoil_duration=recoil_duration,
+                cooldown=cooldown, attack_speed_frac=0.0, max_range=max_range,
+                burst=burst)
+            if chance == 1.0 and damage is not None and window > 0 and ct_zero_as <= window:
+                bd_scaling = bd.get("scaling_stats") or []
+                _validate_scaling_stats(bd_scaling, weapon_id)
+                proc_effects.append({
+                    "kind": "burn_dot",
+                    "damage": float(damage),
+                    "scaling_stats": bd_scaling,
+                    "tick_interval": model["tick_interval"],
+                })
             elif eff.get("key"):
                 unmodeled.append(str(eff["key"]))
         elif source == "companion_ranged_stats":
@@ -114,11 +158,17 @@ def build_weapon_record(stats_text: str, data_text: str,
                 ok = ok and bounce == 0
                 enemies_hit = 1.0
             if ok:
-                p0, ps = calc.companion_dps_line(
-                    float(damage), _rd_coefficient(ws.get("scaling_stats") or []),
-                    ct, count, enemies_hit)
-                proc0 += p0
-                proc_slope += ps
+                ws_scaling = ws.get("scaling_stats") or []
+                _validate_scaling_stats(ws_scaling, weapon_id)
+                proc_effects.append({
+                    "kind": "companion",
+                    "damage": float(damage),
+                    "scaling_stats": ws_scaling,
+                    "crit_chance": float(ws.get("crit_chance", 0.0)),
+                    "crit_damage": float(ws.get("crit_damage", 0.0)),
+                    "count": count,
+                    "enemies_hit": enemies_hit,
+                })
             elif eff.get("key"):
                 unmodeled.append(str(eff["key"]))
         else:
@@ -136,9 +186,15 @@ def build_weapon_record(stats_text: str, data_text: str,
         "display_name": resolve_text(tr, d.get("name"), name),
         "description": resolve_text(tr, d.get("description")),
         "tier": tier,
+        "weapon_type": weapon_type,
         "base_damage": base_damage,
         "cooldown": cooldown,
+        "recoil_duration": recoil_duration,
+        "max_range": max_range,
+        "attack_speed_mod": attack_speed_mod,
         "burst_reload": burst is not None,
+        "additional_cooldown_every_x_shots": every,
+        "additional_cooldown_multiplier": mult,
         "accuracy": accuracy,
         "crit_chance": float(s.get("crit_chance", 0.0)),
         "crit_damage": float(s.get("crit_damage", 0.0)),
@@ -147,17 +203,14 @@ def build_weapon_record(stats_text: str, data_text: str,
         "scaling_stats": scaling_stats,
         "can_have_negative_knockback": bool(s.get("can_have_negative_knockback", False)),
         "base_knockback": s.get("knockback", 0),
-        "cycle_time": ct,
-        "dps_at_zero_rd": dps0,
-        "dps_slope_per_rd": slope,
         "sets": list(classes or []),
         # On-hit effects, resolved from the data .tres `effects`
         # ext_resources. Effects with a verified PROC_MODELS entry contribute
-        # the proc_dps_* expected line; classified non-DPS mechanics land in
+        # a proc_effects descriptor (evaluated at query time by
+        # calc.weapon_dps_profile); classified non-DPS mechanics land in
         # classified_effects; anything left is listed in unmodeled_effects.
         "effects": effects,
-        "proc_dps_at_zero_rd": proc0,
-        "proc_dps_slope_per_rd": proc_slope,
+        "proc_effects": proc_effects,
         "unmodeled_effects": unmodeled,
         "classified_effects": classified,
     }
