@@ -178,3 +178,34 @@ def test_cadence_profile_gap_range_widens_with_weapon_count():
 
 def test_cadence_profile_passes_burst_reload_flag():
     assert calc.cadence_profile(0.63, 90.0, 11, burst_reload=True)["burst_reload"] is True
+
+
+def test_game_round_half_away_from_zero():
+    # GDScript round(32.5) == 33, unlike Python's banker's rounding
+    assert calc.game_round(32.5) == 33
+    assert calc.game_round(62.5) == 63
+    assert calc.game_round(-0.5) == -1
+    assert calc.game_round(2.4) == 2
+
+
+def test_game_int_truncates_toward_zero():
+    assert calc.game_int(25.8) == 25
+    assert calc.game_int(-3.7) == -3
+
+
+def test_effective_cooldown_positive_as_divides():
+    # weapon_service.gd:570-573 — max(MIN_COOLDOWN, cd / (1+as)) as int
+    assert calc.effective_cooldown(60, 0.5) == 40
+    assert calc.effective_cooldown(25, 0.12) == 22  # 22.32 truncates
+
+
+def test_effective_cooldown_negative_as_multiplies():
+    assert calc.effective_cooldown(60, -0.5) == 90
+
+
+def test_effective_cooldown_two_frame_floor():
+    assert calc.effective_cooldown(3, 2.0) == 2
+
+
+def test_effective_cooldown_zero_as_passthrough():
+    assert calc.effective_cooldown(60, 0.0) == 60

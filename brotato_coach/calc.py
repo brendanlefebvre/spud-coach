@@ -8,6 +8,8 @@ with both intercept and slope scaled by accuracy.
 
 from __future__ import annotations
 
+import math
+
 
 def cycle_time(recoil_duration: float, cooldown: float,
                burst: tuple[int, float] | None = None) -> float:
@@ -152,3 +154,37 @@ def compare_lines(line_a: tuple[float, float], line_b: tuple[float, float],
         "rd_independent": False,
         "crossover_rd": crossover_rd,
     }
+
+
+# --- Stat-aware game-exact engine -------------------------------------------
+# Evidence: recovered/singletons/weapon_service.gd (init pipeline),
+# recovered/weapons/shooting_behaviors/*.gd (timing), recovered/entities/
+# units/unit/unit.gd:285-301 (crit roll). See docs/dps-engine.md.
+
+GD_MIN_COOLDOWN = 2.0  # frames; weapon_service.gd:5
+
+
+def game_round(x: float) -> int:
+    """GDScript round(): half away from zero (round(32.5) == 33)."""
+    return math.floor(x + 0.5) if x >= 0 else math.ceil(x - 0.5)  # type: ignore[return-value]
+
+
+def game_int(x: float) -> int:
+    """GDScript `as int`: truncation toward zero."""
+    return math.trunc(x)  # type: ignore[return-value]
+
+
+def effective_cooldown(cooldown: float, attack_speed_frac: float) -> int:
+    """Attack-speed-adjusted cooldown in frames, exactly as the game computes it.
+
+    weapon_service.gd:227-229 floors the base cooldown at MIN_COOLDOWN first,
+    then :570-573 divides by (1+AS) for positive AS or multiplies by (1+|AS|)
+    for negative AS, floors at MIN_COOLDOWN again, and truncates to int.
+    `attack_speed_frac` is (stat_attack_speed + attack_speed_mod)/100.
+    """
+    cd = max(cooldown, GD_MIN_COOLDOWN)
+    if attack_speed_frac > 0:
+        return game_int(max(GD_MIN_COOLDOWN, cd / (1 + attack_speed_frac)))
+    if attack_speed_frac < 0:
+        return game_int(max(GD_MIN_COOLDOWN, cd * (1 + abs(attack_speed_frac))))
+    return game_int(cd)
