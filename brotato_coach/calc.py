@@ -283,3 +283,87 @@ def expected_hit_damage(per_hit: int, weapon_crit_chance: float,
     """
     cc = min(1.0, max(0.0, weapon_crit_chance + player_crit_chance / 100))
     return (1 - cc) * per_hit + cc * game_round(per_hit * crit_damage)
+
+
+def weapon_dps_profile(rec: dict, stats: dict, *, level: float = 0.0,
+                       aoe_enemies_hit: float = 1.0,
+                       engagement_distance: float | None = None) -> dict:
+    """Realized expected DPS of one weapon record at a full stat block.
+
+    Direct line: expected_hit_damage * accuracy / cycle_time. Proc lines from
+    `proc_effects` re-run the same pipeline (weapon_damage re-deals the
+    weapon's own hit; burn ticks run scaling+%damage without crit; companion
+    projectiles carry their own damage/scaling/crit). `aoe_enemies_hit`
+    multiplies proc enemies-hit assumptions, as before.
+
+    Companion damage pipeline verified against
+    recovered/effects/weapons/projectiles_on_hit_effect.gd (calls
+    WeaponService.init_ranged_stats(weapon_stats, player_index, is_special_spawn=true))
+    and recovered/singletons/weapon_service.gd:init_base_stats: damage scaling
+    (:237) and %damage bonus (:239,249) apply unconditionally, and player crit
+    chance is added (:252-253, gated only on `not is_structure` — companions are
+    not structures) — the full pipeline the brief assumed, so no fallback needed.
+    """
+    asf = (stat_value(stats, "stat_attack_speed")
+           + float(rec.get("attack_speed_mod", 0.0))) / 100
+    burst = None
+    every = rec.get("additional_cooldown_every_x_shots", -1)
+    mult = rec.get("additional_cooldown_multiplier", -1.0)
+    if isinstance(every, int) and every > 0 and mult and mult > 0:
+        burst = (every, float(mult))
+    is_melee = rec.get("weapon_type") == "melee"
+    dist_used = (min(float(rec.get("max_range", 0.0)), DEFAULT_ENGAGEMENT_DISTANCE)
+                 if engagement_distance is None else engagement_distance) if is_melee else None
+    ct = stat_aware_cycle_time(
+        weapon_type=rec.get("weapon_type", "ranged"),
+        recoil_duration=float(rec.get("recoil_duration", 0.0)),
+        cooldown=float(rec.get("cooldown", 0.0)),
+        attack_speed_frac=asf,
+        max_range=float(rec.get("max_range", 0.0)),
+        engagement_distance=dist_used if is_melee else None,
+        burst=burst)
+
+    hit = per_hit_damage(float(rec["base_damage"]), rec.get("scaling_stats") or [],
+                         stats, level=level)
+    cc_total = min(1.0, max(0.0, float(rec.get("crit_chance", 0.0))
+                            + stat_value(stats, "stat_crit_chance") / 100))
+    expected = expected_hit_damage(hit, float(rec.get("crit_chance", 0.0)),
+                                   float(rec.get("crit_damage", 0.0)),
+                                   stat_value(stats, "stat_crit_chance"))
+    accuracy = float(rec.get("accuracy", 1.0))
+    base_dps = expected * accuracy / ct if ct > 0 else 0.0
+
+    proc_dps = 0.0
+    for eff in rec.get("proc_effects") or []:
+        kind = eff.get("kind")
+        if kind == "weapon_damage":
+            proc_dps += (base_dps * float(eff["chance"])
+                         * float(eff["enemies_hit"]) * aoe_enemies_hit
+                         * float(eff.get("multiplier", 1.0)))
+        elif kind == "burn_dot":
+            tick = per_hit_damage(float(eff["damage"]),
+                                  eff.get("scaling_stats") or [], stats, level=level)
+            proc_dps += tick / float(eff["tick_interval"])
+        elif kind == "companion":
+            c_hit = per_hit_damage(float(eff["damage"]),
+                                   eff.get("scaling_stats") or [], stats, level=level)
+            c_expected = expected_hit_damage(
+                c_hit, float(eff.get("crit_chance", 0.0)),
+                float(eff.get("crit_damage", 0.0)),
+                stat_value(stats, "stat_crit_chance"))
+            proc_dps += (c_expected * float(eff["count"])
+                         * float(eff["enemies_hit"]) * aoe_enemies_hit
+                         / ct * accuracy) if ct > 0 else 0.0
+
+    return {
+        "dps": base_dps + proc_dps,
+        "base_dps": base_dps,
+        "proc_dps": proc_dps,
+        "cycle_time": ct,
+        "per_hit_damage": hit,
+        "expected_hit_damage": expected,
+        "crit_chance_total": cc_total,
+        "effective_cooldown_frames": effective_cooldown(
+            float(rec.get("cooldown", 0.0)), asf),
+        "engagement_distance_used": dist_used,
+    }

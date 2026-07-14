@@ -302,3 +302,76 @@ def test_expected_hit_damage_crit_expectation():
 def test_expected_hit_damage_crit_clamped_to_certainty():
     # weapon 0.2 + player 200% -> clamp 1.0 -> always round(32*2.5)=80
     assert calc.expected_hit_damage(32, 0.2, 2.5, player_crit_chance=200) == pytest.approx(80.0)
+
+
+KNIFE_T1 = {
+    "weapon_type": "melee", "base_damage": 9.0, "cooldown": 25.0,
+    "recoil_duration": 0.1, "attack_speed_mod": 0.0, "accuracy": 1.0,
+    "crit_chance": 0.2, "crit_damage": 2.5, "max_range": 150.0,
+    "scaling_stats": [["stat_melee_damage", 0.8]],
+    "additional_cooldown_every_x_shots": -1, "additional_cooldown_multiplier": -1.0,
+    "proc_effects": [],
+}
+
+PISTOL_T1 = {
+    "weapon_type": "ranged", "base_damage": 12.0, "cooldown": 60.0,
+    "recoil_duration": 0.1, "attack_speed_mod": 0.0, "accuracy": 0.9,
+    "crit_chance": 0.1, "crit_damage": 2.0, "max_range": 400.0,
+    "scaling_stats": [["stat_ranged_damage", 1.0]],
+    "additional_cooldown_every_x_shots": -1, "additional_cooldown_multiplier": -1.0,
+    "proc_effects": [],
+}
+
+
+def test_profile_knife_t1_melee_damage_20():
+    # d2=25; expected = 0.8*25 + 0.2*round(62.5)=0.2*63 -> 32.6; ct=0.8916667
+    p = calc.weapon_dps_profile(KNIFE_T1, {"melee_damage": 20})
+    assert p["per_hit_damage"] == 25
+    assert p["expected_hit_damage"] == pytest.approx(32.6)
+    assert p["cycle_time"] == pytest.approx(0.8916666667)
+    assert p["dps"] == pytest.approx(36.5607476636)
+    assert p["engagement_distance_used"] == 70.0
+
+
+def test_profile_pistol_t1_rd10_accuracy():
+    # d2=22; expected = 0.9*22 + 0.1*round(44)=24.2; dps = 24.2/1.2*0.9 = 18.15
+    p = calc.weapon_dps_profile(PISTOL_T1, {"ranged_damage": 10})
+    assert p["dps"] == pytest.approx(18.15)
+    assert p["engagement_distance_used"] is None
+
+
+def test_profile_melee_dps_responds_to_melee_damage():
+    lo = calc.weapon_dps_profile(KNIFE_T1, {})["dps"]
+    hi = calc.weapon_dps_profile(KNIFE_T1, {"melee_damage": 50})["dps"]
+    assert hi > lo  # the bug this project exists to fix
+
+
+def test_profile_weapon_damage_proc():
+    rec = dict(PISTOL_T1, proc_effects=[
+        {"kind": "weapon_damage", "chance": 0.5, "enemies_hit": 1.0, "multiplier": 1.0}])
+    p = calc.weapon_dps_profile(rec, {"ranged_damage": 10}, aoe_enemies_hit=2.0)
+    assert p["base_dps"] == pytest.approx(18.15)
+    # proc = base_dps * chance * (enemies_hit * aoe factor): 18.15 * 0.5 * 2.0
+    assert p["proc_dps"] == pytest.approx(18.15)
+    assert p["dps"] == pytest.approx(36.30)
+
+
+def test_profile_burn_scales_with_elemental():
+    rec = dict(PISTOL_T1, proc_effects=[
+        {"kind": "burn_dot", "damage": 3.0,
+         "scaling_stats": [["stat_elemental_damage", 1.0]], "tick_interval": 0.5}])
+    zero = calc.weapon_dps_profile(rec, {})
+    ele = calc.weapon_dps_profile(rec, {"elemental_damage": 10})
+    # tick dmg: max(1, 3+10)=13; %damage none -> 13/0.5 = 26 burn dps
+    assert ele["proc_dps"] - zero["proc_dps"] == pytest.approx(26.0 - 6.0)
+
+
+def test_profile_companion_proc():
+    rec = dict(PISTOL_T1, proc_effects=[
+        {"kind": "companion", "damage": 5.0,
+         "scaling_stats": [["stat_elemental_damage", 1.0]],
+         "crit_chance": 0.0, "crit_damage": 0.0, "count": 1.0, "enemies_hit": 2.0}])
+    p = calc.weapon_dps_profile(rec, {"elemental_damage": 5})
+    # companion hit: max(1, 5+5)=10 -> expected 10 (no crit);
+    # per host cycle (1.2s), accuracy 0.9 host hit-rate: 10*1*2/1.2*0.9 = 15
+    assert p["proc_dps"] == pytest.approx(15.0)
