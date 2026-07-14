@@ -29,9 +29,13 @@ full player stat block.
    `max(1, …)` floors, and the 2-frame cooldown floor. Crit and accuracy layer on
    top as expectations (DPS is an expected value; per-hit damage is exact).
 4. **Set bonuses:** weapon-set count bonuses are stat grants in the dataset
-   (`sets[].bonuses`: count → `{key, value}`). When a loadout is supplied, active
-   damage-typed grants merge into the stat block before evaluation. Non-damage
-   grants (armor, dodge, …) remain advisory.
+   (`sets[].bonuses`: count → `{key, value}`). In-game they are real player
+   effects, so stats read from the screen or a save ALREADY include them.
+   Supplying a `loadout` therefore derives and *reports* the active grants in
+   the assumptions block; merging them into the stat block is opt-in
+   (`apply_set_bonuses=True`, for pure-theorycraft stat blocks that exclude
+   them). Save-derived paths never merge. (Refined 2026-07-13 from "always
+   merge when loadout supplied" to avoid double-counting.)
 5. **Gradient tool ships in v1** (`stat_gradient`): ranks stats by ΔDPS per
    shop-realistic step against the current loadout.
 6. **Melee engagement distance:** default `distance = min(max_range, 70)` (so
