@@ -56,7 +56,7 @@ branch) — `calc.stat_value` special-cases it.
 `weapon_service.gd:239-249`:
 
 ```
-d2 = max(1, round(d1 * (set_bonus_dmg + 1 + %damage/100 [+ explosion_damage/100 if exploding]))) as int
+d2 = max(1, round(d1 * (set_bonus_dmg + 1 + %damage/100))) as int
 ```
 
 `round` is GDScript's half-away-from-zero rounding (`calc.game_round`), not
@@ -67,6 +67,12 @@ Keys.stat_percent_damage_hash` branch inside the per-set-bonus loop) —
 codebase passes 0 today (character class bonuses stay advisory; see "Not
 modeled" below). Floor is 1 damage — `%damage` can go arbitrarily negative
 without ever reducing a hit to 0.
+
+The real game's `weapon_service.gd:239-249` bracket has a third term this
+engine does not replicate: for weapons flagged `is_exploding`, an
+`exploding_dmg_bonus = explosion_damage/100` (the player's `explosion_damage`
+stat) is added into the same bucket as `set_bonus_dmg` and `%damage`.
+`calc.per_hit_damage` has no parameter for it — see "Not modeled" below.
 
 ## C. Crit (expectation, not a roll)
 
@@ -262,3 +268,13 @@ sitting on a rounding plateau.
   scope — this is a DPS engine, not a build evaluator. `stat_gradient` ranks
   DPS impact only; a stat that helps survivability but not DPS (e.g. armor)
   will never rank on its gradient, which is expected, not a bug.
+- **Explosion-damage bonus not folded into per-hit damage for exploding
+  weapons** — the game's step-B bracket (`weapon_service.gd:239-249`) adds an
+  `exploding_dmg_bonus = explosion_damage/100` term for weapons flagged
+  `is_exploding`, but `calc.per_hit_damage` has no parameter for the
+  player's `explosion_damage` stat. The `weapon_damage` proc line (step F)
+  re-deals the weapon's already-computed hit rather than recomputing this
+  bonus live, so a build stacking `explosion_damage` items will out-DPS what
+  this engine reports for exploding weapons. See
+  `docs/proc-mechanics.md`'s "Known limitation" note for the same gap from
+  the proc side.
