@@ -161,6 +161,67 @@ def compare_merge_paths(ds: dict, weapon_name: str, path_a: list, path_b: list,
     return {**result, "winner": w_hi, "rd_independent": True, "crossover_rd": None}
 
 
+_UNIVERSAL_GRADIENT_STATS = ("damage", "attack_speed", "crit_chance")
+
+
+def stat_gradient(ds: dict, weapons: list, stats: dict, step: float = 10.0,
+                  character: str | None = None, aoe_enemies_hit: float = 1.0,
+                  engagement_distance: float | None = None) -> dict:
+    """Rank stats by how much +`step` of each would raise the loadout's total
+    DPS. Candidates = the union of the loadout's scaling stats plus the
+    universal multipliers (%damage, attack speed, crit chance). The default
+    step of 10 is deliberate: the game's integer damage arithmetic makes a
+    ±1 delta frequently zero and unrepresentative.
+    """
+    if character is not None:
+        stats = display_stats(ds, character, stats)
+    recs = []
+    for name, tier in weapons:
+        rec = _weapon_at(ds, name, tier)
+        if rec is None:
+            return {"error": "not_found",
+                    "did_you_mean": query.suggest(ds["weapons"], name)}
+        recs.append(rec)
+
+    def total(s: dict) -> float:
+        return sum(calc.weapon_dps_profile(
+            r, s, level=float(s.get("level", 0)),
+            aoe_enemies_hit=aoe_enemies_hit,
+            engagement_distance=engagement_distance)["dps"] for r in recs)
+
+    candidates: list[str] = []
+    for rec in recs:
+        for entry in rec.get("scaling_stats") or []:
+            name = entry[0]
+            if name == "stat_levels":
+                continue
+            short = calc._SHORT_BY_STAT_NAME.get(name, name.removeprefix("stat_"))
+            if short not in candidates:
+                candidates.append(short)
+    for short in _UNIVERSAL_GRADIENT_STATS:
+        if short not in candidates:
+            candidates.append(short)
+
+    baseline = total(stats)
+    rows = []
+    for short in candidates:
+        bumped = dict(stats)
+        bumped[short] = float(bumped.get(short, 0)) + step
+        after = total(bumped)
+        row = {"stat": short, "dps_after": after,
+               "dps_delta": after - baseline,
+               "dps_delta_per_point": (after - baseline) / step}
+        if short == "crit_chance":
+            row["saturated"] = all(
+                calc.weapon_dps_profile(r, stats)["crit_chance_total"] >= 1.0
+                for r in recs)
+        rows.append(row)
+    rows.sort(key=lambda x: x["dps_delta"], reverse=True)
+    return {"baseline_dps": baseline, "step": step, "gradient": rows,
+            "note": f"delta per +{step} of each stat; integer game arithmetic makes "
+                    "small steps non-representative"}
+
+
 def explain_stat(ds: dict, stat: str) -> dict:
     mechanics = ds.get("stat_mechanics", {})
     if stat not in mechanics:

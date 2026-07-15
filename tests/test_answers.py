@@ -144,6 +144,25 @@ def test_merge_paths_dominant_path():
     assert r["rd_independent"] is True
 
 
+def test_stat_gradient_ranks_scaling_stat_first():
+    r = answers.stat_gradient(DS, [("Knife", 1)], {"melee_damage": 20})
+    assert r["baseline_dps"] == pytest.approx(36.5607476636)
+    top = r["gradient"][0]
+    assert top["stat"] == "melee_damage"
+    # md30: d2=33, exp=43.0, dps=48.2242990654
+    assert top["dps_delta"] == pytest.approx(48.2242990654 - 36.5607476636)
+    by_stat = {g["stat"]: g for g in r["gradient"]}
+    assert by_stat["attack_speed"]["dps_after"] == pytest.approx(41.8483864071)
+    assert by_stat["crit_chance"]["dps_after"] == pytest.approx(40.8224299065)
+    assert by_stat["damage"]["dps_after"] == pytest.approx(40.8224299065)
+
+
+def test_stat_gradient_flags_saturated_crit():
+    r = answers.stat_gradient(DS, [("Knife", 1)], {"crit_chance": 80})
+    by_stat = {g["stat"]: g for g in r["gradient"]}
+    assert by_stat["crit_chance"]["saturated"] is True
+
+
 def test_explain_stat_known():
     result = answers.explain_stat(DS, "stat_attack_speed")
     assert result["never_dead_weight"] is True
