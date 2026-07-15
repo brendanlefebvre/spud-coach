@@ -226,3 +226,34 @@ def test_evaluate_run_reports_class_synergy():
 def test_evaluate_run_class_synergy_empty_without_bonus():
     r = answers.evaluate_run(DS, _run())
     assert r["class_synergy"]["bonuses"] == []
+
+
+def test_evaluate_run_includes_top_stat_gradient():
+    r = answers.evaluate_run(DS, _run(stats={"ranged_damage": 8}))
+    gradient = r["top_stat_gradient"]
+    assert len(gradient) > 0
+    assert len(gradient) <= 5
+    deltas = [row["dps_delta"] for row in gradient]
+    assert deltas == sorted(deltas, reverse=True)
+
+
+DS_MELEE = copy.deepcopy(DS)
+DS_MELEE["weapons"] = [
+    {"id": "weapon_knife", "name": "Knife", "tier": 1, "sets": ["Blade"],
+     "weapon_type": "melee", "base_damage": 9.0, "cooldown": 25.0,
+     "recoil_duration": 0.1, "accuracy": 1.0, "crit_chance": 0.0,
+     "crit_damage": 0.0, "max_range": 150.0,
+     "scaling_stats": [["stat_melee_damage", 0.8]], "proc_effects": []},
+]
+
+
+def test_evaluate_run_melee_weapon_ranking_responds_to_melee_damage():
+    # Two saves differing only in melee_damage should produce different
+    # DPS on the melee weapon's ranking row -- the stat-aware engine
+    # scales melee weapons too, not just ranged_damage.
+    weapons = [{"weapon_id": "weapon_knife", "tier": "0"}]
+    r_low = answers.evaluate_run(
+        DS_MELEE, _run(weapons=weapons, stats={"melee_damage": 0}))
+    r_high = answers.evaluate_run(
+        DS_MELEE, _run(weapons=weapons, stats={"melee_damage": 20}))
+    assert r_low["weapon_dps_ranking"][0]["dps"] != r_high["weapon_dps_ranking"][0]["dps"]

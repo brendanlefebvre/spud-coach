@@ -326,12 +326,20 @@ def evaluate_run(ds: dict, run: dict) -> dict:
 
     # Convert once: raw effects values -> displayed (post-gain-modifier)
     # values, matching what the player actually sees and what weapon_dps'
-    # RD-scaling model expects.
+    # stat-aware DPS engine expects.
     stats = display_stats(ds, build["character"], build["stats"])
 
     ranking = compare_weapons(
         ds, [(w["id"], w["tier"]) for w in build["weapons"]], stats,
         weapon_count=len(build["weapons"]))["ranking"]
+
+    # stat_gradient (unlike compare_weapons) errors out on any unknown
+    # weapon rather than skipping it -- filter to known weapons here so an
+    # unrecognized id (already surfaced via notes below) doesn't blow up
+    # the whole report.
+    known_weapons = [(w["id"], w["tier"]) for w in build["weapons"]
+                     if _weapon_at(ds, w["id"], w["tier"]) is not None]
+    top_stat_gradient = stat_gradient(ds, known_weapons, stats)["gradient"][:5]
 
     weapon_ids = [w["id"] for w in build["weapons"]]
     set_bonuses = loadout_set_bonuses(ds, weapon_ids)
@@ -368,6 +376,7 @@ def evaluate_run(ds: dict, run: dict) -> dict:
         "realized_stats": stats,
         "weapons": build["weapons"],
         "weapon_dps_ranking": ranking,
+        "top_stat_gradient": top_stat_gradient,
         "set_bonuses": set_bonuses,
         "class_synergy": class_synergy,
         "item_verdicts": item_verdicts,
