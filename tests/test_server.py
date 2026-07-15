@@ -284,3 +284,71 @@ def test_get_filter_options_tool_bestiary_fields():
     assert result["enemy_abilities"] == ["charger"]
     assert result["attack_kinds"] == ["melee"]
     assert result["enemy_appears_in"] == ["normal"]
+
+
+def test_stat_gradient_tool_registered_and_listed():
+    names = {t.name for t in _tool_list(build_server(DS))}
+    assert "stat_gradient" in names
+
+
+def test_stat_gradient_tool_ranks_stats():
+    result = asyncio.run(_call(build_server(DS), "stat_gradient",
+                               weapons=[["Minigun", 4]],
+                               stats={"ranged_damage": 10}))
+    assert "gradient" in result
+    assert result["gradient"][0]["stat"] == "ranged_damage"
+
+
+def test_weapon_dps_tool_result_carries_assumptions():
+    result = asyncio.run(_call(build_server(DS), "weapon_dps", name="Minigun",
+                               tier=4, stats={"ranged_damage": 10}))
+    assert result["assumptions"]["aoe_enemies_hit"] == 1.0
+    assert result["assumptions"]["set_bonuses_applied"] is False
+
+
+def test_weapon_dps_tool_accepts_loadout_and_apply_set_bonuses():
+    ds = {**DS,
+          "weapons": [{**DS["weapons"][0], "sets": ["Gun"]}],
+          "sets": [{"id": "set_gun", "name": "Gun", "bonuses": [
+              {"count": 1, "effect": {"key": "stat_ranged_damage", "value": 5}}]}]}
+    with_bonus = asyncio.run(_call(build_server(ds), "weapon_dps", name="Minigun",
+                                   tier=4, stats={"ranged_damage": 10},
+                                   loadout=["Minigun"], apply_set_bonuses=True))
+    without_bonus = asyncio.run(_call(build_server(ds), "weapon_dps", name="Minigun",
+                                      tier=4, stats={"ranged_damage": 10}))
+    assert with_bonus["dps"] > without_bonus["dps"]
+    assert with_bonus["assumptions"]["set_bonuses_applied"] is True
+    assert with_bonus["assumptions"]["active_set_bonuses"][0]["effect"]["value"] == 5
+
+
+def test_weapon_dps_tool_accepts_engagement_distance():
+    melee_ds = {**DS, "weapons": [{**DS["weapons"][0], "weapon_type": "melee",
+                                   "max_range": 200.0}]}
+    result = asyncio.run(_call(build_server(melee_ds), "weapon_dps", name="Minigun",
+                               tier=4, stats={"ranged_damage": 10},
+                               engagement_distance=50.0))
+    assert result["assumptions"]["engagement_distance"] == 50.0
+
+
+def test_compare_weapons_tool_accepts_loadout_and_apply_set_bonuses():
+    ds = {**DS,
+          "weapons": [{**DS["weapons"][0], "sets": ["Gun"]}],
+          "sets": [{"id": "set_gun", "name": "Gun", "bonuses": [
+              {"count": 1, "effect": {"key": "stat_ranged_damage", "value": 5}}]}]}
+    result = asyncio.run(_call(build_server(ds), "compare_weapons",
+                               names_with_tiers=[["Minigun", 4]],
+                               stats={"ranged_damage": 10},
+                               loadout=["Minigun"], apply_set_bonuses=True))
+    assert result["ranking"][0]["dps"] > 100.0
+
+
+def test_compare_merge_paths_tool_accepts_stats():
+    server = build_server(DS)
+    baseline = asyncio.run(_call(server, "compare_merge_paths",
+                                 weapon_name="Minigun", path_a=[4], path_b=[4]))
+    with_stats = asyncio.run(_call(server, "compare_merge_paths",
+                                   weapon_name="Minigun", path_a=[4], path_b=[4],
+                                   stats={"damage": 100}))
+    # +100 %damage doubles the guaranteed line at every RD in range, so the
+    # stats param must be threaded through to move the reported DPS.
+    assert with_stats["dps_a_at_range_ends"][0] > baseline["dps_a_at_range_ends"][0]

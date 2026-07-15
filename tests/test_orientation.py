@@ -23,8 +23,9 @@ def test_primer_contains_required_sentinels():
         # every classification category, by exact name
         "stat_rider", "dynamic", "economy", "cc", "delivery_modifier",
         "drawback", "execute", "stack", "structure",
-        # dataset-convention vocabulary
-        "dps_at_zero_rd", "dps_slope_per_rd", "zero-stat", "cycle_time",
+        # dataset-convention vocabulary (stat-aware engine)
+        "base_dps", "proc_dps", "assumptions", "engagement_distance",
+        "stat_gradient", "cycle_time",
         "classified_effects", "unmodeled_effects", "enemies_hit",
         # exploding-proc rider stats: both named, with the manual formula
         # for explosion_damage so callers compute instead of giving up
