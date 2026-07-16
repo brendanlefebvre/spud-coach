@@ -258,6 +258,28 @@ def test_find_weapon_dirs_main_data_glob_skips_burning_data_companion(tmp_path):
     assert not found[0]["data_path"].endswith("torch_burning_data.tres")
 
 
+def test_find_weapon_dirs_stats_glob_skips_proj_stats_companion(tmp_path):
+    # Regression: Sniper Gun's tier dirs hold both "{w}_stats.tres" (the
+    # weapon's own stats) and its "{w}_proj_stats.tres" companion (the
+    # projectile's stats). The latter also matches "*_stats.tres", and on
+    # some filesystems unsorted glob order picked it first, corrupting the
+    # shipped weapon_sniper_gun record (wrong base_damage, cooldown,
+    # max_range, scaling_stats, recoil_duration). The stats glob must
+    # exclude "*_proj_stats.tres".
+    wdir = tmp_path / "weapons" / "ranged" / "sniper_gun" / "3"
+    wdir.mkdir(parents=True)
+    (wdir / "sniper_gun_3_proj_stats.tres").write_text("proj stats")
+    (wdir / "sniper_gun_3_stats.tres").write_text("real stats")
+    (wdir / "sniper_gun_3_data.tres").write_text(
+        '[gd_resource type="Resource" format=2]\n[resource]\n'
+        'effects = [ ]\n', encoding="utf-8")
+
+    found = find_weapon_dirs(str(tmp_path))
+    assert len(found) == 1
+    assert found[0]["stats_path"].endswith("sniper_gun_3_stats.tres")
+    assert not found[0]["stats_path"].endswith("proj_stats.tres")
+
+
 def test_find_enemy_dirs(tmp_path):
     import os
 

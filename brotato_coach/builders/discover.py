@@ -96,9 +96,12 @@ def find_weapon_dirs(extracted_root: str) -> list[dict]:
             if not tier_name.isdigit():
                 continue
             weapon_folder = os.path.basename(os.path.dirname(tier_dir))
-            stats = glob.glob(os.path.join(tier_dir, "*_stats.tres"))
-            data = [p for p in glob.glob(os.path.join(tier_dir, "*_data.tres"))
-                    if not os.path.basename(p).endswith("_burning_data.tres")]
+            stats = sorted(
+                p for p in glob.glob(os.path.join(tier_dir, "*_stats.tres"))
+                if not os.path.basename(p).endswith("_proj_stats.tres"))
+            data = sorted(
+                p for p in glob.glob(os.path.join(tier_dir, "*_data.tres"))
+                if not os.path.basename(p).endswith("_burning_data.tres"))
             if not stats or not data:
                 continue
             effect_paths, classes = _resolve_weapon_refs(extracted_root, data[0])
