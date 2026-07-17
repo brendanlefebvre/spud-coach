@@ -46,3 +46,9 @@ def test_stat_attack_speed_melee_extras_documented():
     assert "melee_shooting_data.gd" in summary
     assert "back-swing" in summary
     assert "wind-up" in summary
+
+
+def test_stat_attack_speed_negative_penalty_documented():
+    summary = STAT_MECHANICS["stat_attack_speed"]["summary"]
+    assert "MULTIPLIES the cooldown" in summary
+    assert "weapon_service.gd:570-574" in summary

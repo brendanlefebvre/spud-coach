@@ -6,7 +6,10 @@ from brotato_coach.builders.mechanics import STAT_MECHANICS
 
 DATASET_VERSION = 6  # was 5 (raw stat-aware weapon fields replace precomputed RD lines)
 
-_REQUIRED_WEAPON_KEYS = ("id", "name", "tier", "weapon_type")
+# base_damage and cooldown are calculation-critical: the DPS engine reads them
+# unconditionally, so a weapon without them must fail the build, not a query.
+_REQUIRED_WEAPON_KEYS = ("id", "name", "tier", "weapon_type", "base_damage", "cooldown")
+_WEAPON_TYPES = ("melee", "ranged")
 
 
 def assemble_dataset(*, game_version: str, generated_at: str, weapons: list,
@@ -40,6 +43,9 @@ def validate_dataset(dataset: dict) -> list[str]:
         tier = w.get("tier")
         if not isinstance(tier, int) or not (1 <= tier <= 4):
             problems.append(f"weapon {wid} has invalid tier: {tier}")
+        wt = w.get("weapon_type")
+        if wt is not None and wt not in _WEAPON_TYPES:
+            problems.append(f"weapon {wid} has unknown weapon_type: {wt}")
 
     for it in dataset.get("items", []):
         if not isinstance(it.get("effects"), list):
