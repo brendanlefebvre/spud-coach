@@ -144,6 +144,19 @@ def test_merge_paths_dominant_path():
     assert r["rd_independent"] is True
 
 
+def test_merge_paths_forward_fixed_level_stat():
+    # Laser rescaled to stat_levels: per_hit = 12 + 1.0 x level, ct 1.2.
+    # A fixed stats block with level 5 must reach the profile ->
+    # 17/1.2, not 12/1.2.
+    ds = {**DS, "weapons": [
+        {**LASER_T1, "scaling_stats": [["stat_levels", 1.0]]},
+        {**LASER_T2, "scaling_stats": [["stat_levels", 1.0]]},
+    ]}
+    r = answers.compare_merge_paths(ds, "Laser", [1], [2], rd_range=(0, 10),
+                                    stats={"level": 5})
+    assert r["dps_a_at_range_ends"][0] == pytest.approx(17 / 1.2)
+
+
 def test_stat_gradient_ranks_scaling_stat_first():
     r = answers.stat_gradient(DS, [("Knife", 1)], {"melee_damage": 20})
     assert r["baseline_dps"] == pytest.approx(36.5607476636)

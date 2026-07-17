@@ -132,7 +132,7 @@ def compare_merge_paths(ds: dict, weapon_name: str, path_a: list, path_b: list,
             rec = _weapon_at(ds, weapon_name, t)
             if rec is None:
                 return None
-            acc += calc.weapon_dps_profile(rec, s)["dps"]
+            acc += calc.weapon_dps_profile(rec, s, level=float(s.get("level", 0)))["dps"]
         return acc
 
     lo, hi = int(rd_range[0]), int(rd_range[1])
