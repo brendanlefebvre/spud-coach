@@ -214,6 +214,17 @@ def test_weapon_dps_without_character_uses_raw_stats():
     assert result["dps"] == pytest.approx(14.85)
 
 
+def test_compare_weapons_rows_carry_assumptions():
+    # the server docstring promises per-row active set-bonus reporting;
+    # each ranking row must keep weapon_dps' assumptions block
+    r = answers.compare_weapons(DS, [("Knife", 1), ("Pistol", 1)], {},
+                                loadout=["Knife", "Knife"])
+    for row in r["ranking"]:
+        a = row["assumptions"]
+        assert a["set_bonuses_applied"] is False
+        assert a["active_set_bonuses"]  # the 2-Blade bonus is active
+
+
 def test_compare_weapons_with_character_uses_displayed_stats():
     result = answers.compare_weapons(
         DS, [("Pistol", 1)], {"ranged_damage": 6}, character="Ranger")

@@ -108,7 +108,8 @@ def compare_weapons(ds: dict, names_with_tiers: list, stats: dict,
         if "dps" in r:
             row = {"name": r["name"], "tier": tier, "dps": r["dps"],
                    "base_dps": r["base_dps"], "proc_dps": r["proc_dps"],
-                   "unmodeled_effects": r["unmodeled_effects"]}
+                   "unmodeled_effects": r["unmodeled_effects"],
+                   "assumptions": r["assumptions"]}
             if "cadence" in r:
                 row["cadence"] = r["cadence"]
             rows.append(row)
