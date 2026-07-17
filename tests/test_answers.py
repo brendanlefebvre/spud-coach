@@ -144,6 +144,22 @@ def test_merge_paths_dominant_path():
     assert r["rd_independent"] is True
 
 
+def test_merge_paths_interior_flipflop_is_not_rd_independent():
+    # A (base 5, x0.4) vs two B (base 2, x0.25), same ct: integer rounding
+    # makes the winner sequence a..a with B strictly ahead only at rd 12 —
+    # matching endpoint winners must not short-circuit the interior scan.
+    ds = {**DS, "weapons": [
+        {**LASER_T1, "base_damage": 5.0,
+         "scaling_stats": [["stat_ranged_damage", 0.4]]},
+        {**LASER_T2, "base_damage": 2.0,
+         "scaling_stats": [["stat_ranged_damage", 0.25]]},
+    ]}
+    r = answers.compare_merge_paths(ds, "Laser", [1], [2, 2], rd_range=(0, 15))
+    assert r["rd_independent"] is False
+    assert r["winner"] is None
+    assert r["crossover_rd"] == 12
+
+
 def test_merge_paths_forward_fixed_level_stat():
     # Laser rescaled to stat_levels: per_hit = 12 + 1.0 x level, ct 1.2.
     # A fixed stats block with level 5 must reach the profile ->

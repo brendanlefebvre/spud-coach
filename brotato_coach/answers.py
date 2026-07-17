@@ -137,11 +137,13 @@ def compare_merge_paths(ds: dict, weapon_name: str, path_a: list, path_b: list,
         return acc
 
     lo, hi = int(rd_range[0]), int(rd_range[1])
-    a_lo, b_lo = total(path_a, lo), total(path_b, lo)
-    if a_lo is None or b_lo is None:
+    if total(path_a, lo) is None or total(path_b, lo) is None:
         return {"error": "not_found",
                 "did_you_mean": query.suggest(ds["weapons"], weapon_name)}
-    a_hi, b_hi = total(path_a, hi), total(path_b, hi)
+    # Independently rounded tier curves can overtake mid-range and return, so
+    # matching endpoint winners prove nothing — evaluate every integer RD.
+    dps_a = [total(path_a, rd) for rd in range(lo, hi + 1)]
+    dps_b = [total(path_b, rd) for rd in range(lo, hi + 1)]
 
     def _winner(a: float, b: float) -> str:
         if abs(a - b) < 1e-9:
@@ -149,17 +151,23 @@ def compare_merge_paths(ds: dict, weapon_name: str, path_a: list, path_b: list,
         return "a" if a > b else "b"
 
     result = {"weapon": weapon_name, "path_a": path_a, "path_b": path_b,
-              "dps_a_at_range_ends": [a_lo, a_hi],
-              "dps_b_at_range_ends": [b_lo, b_hi]}
-    w_lo, w_hi = _winner(a_lo, b_lo), _winner(a_hi, b_hi)
-    if w_lo == w_hi or w_lo == "tie":
-        return {**result, "winner": w_hi, "rd_independent": True, "crossover_rd": None}
-    for rd in range(lo + 1, hi + 1):
-        a, b = total(path_a, rd), total(path_b, rd)
-        overtaken = b >= a if w_hi == "b" else a >= b
-        if overtaken:
-            return {**result, "winner": None, "rd_independent": False, "crossover_rd": rd}
-    return {**result, "winner": w_hi, "rd_independent": True, "crossover_rd": None}
+              "dps_a_at_range_ends": [dps_a[0], dps_a[-1]],
+              "dps_b_at_range_ends": [dps_b[0], dps_b[-1]]}
+    winners = [_winner(a, b) for a, b in zip(dps_a, dps_b, strict=True)]
+    strict = [w for w in winners if w != "tie"]
+    if not strict:
+        return {**result, "winner": "tie", "rd_independent": True, "crossover_rd": None}
+    w0 = strict[0]
+    if all(w == w0 for w in strict):
+        return {**result, "winner": w0, "rd_independent": True, "crossover_rd": None}
+    # Crossover = first strict win by the other path, walked back over the
+    # contiguous weak-overtake (tie) run leading into it.
+    other = "b" if w0 == "a" else "a"
+    idx = winners.index(other)
+    weak = (lambda i: dps_b[i] >= dps_a[i]) if other == "b" else (lambda i: dps_a[i] >= dps_b[i])
+    while idx > 0 and weak(idx - 1):
+        idx -= 1
+    return {**result, "winner": None, "rd_independent": False, "crossover_rd": lo + idx}
 
 
 _UNIVERSAL_GRADIENT_STATS = ("damage", "attack_speed", "crit_chance")
