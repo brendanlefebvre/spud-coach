@@ -6,14 +6,25 @@ from brotato_coach.runfile import godot_string_hash
 # A synthetic dataset with just enough to exercise every composed analysis:
 # two Gun-class weapons (for DPS ranking + set progress), one item with a
 # ranged-damage effect (for the per-item verdict), and the Ranger.
+#
+# Raw stat-aware fields (schema v6): base_damage 1.0 + 1.0x ranged_damage per
+# hit (int, no crit/percent-damage modifiers here) over cycle_time = 2 x
+# recoil_duration + cooldown/60. SMG: ct = 0.2 + 18/60 = 0.5s -> dps = per_hit
+# / 0.5. Pistol: ct = 0.2 + 48/60 = 1.0s -> dps = per_hit / 1.0. At RD 8:
+# SMG per_hit 9 -> dps 18.0; Pistol per_hit 9 -> dps 9.0 (same golden values
+# the old precomputed-line fixture produced, by construction).
 DS = {
     "weapons": [
         {"id": "weapon_smg", "name": "SMG", "tier": 1, "sets": ["Gun"],
-         "dps_at_zero_rd": 10.0, "dps_slope_per_rd": 1.0,
-         "cycle_time": 0.3, "cooldown": 12, "scaling_stats": []},
+         "weapon_type": "ranged", "base_damage": 1.0, "cooldown": 18.0,
+         "recoil_duration": 0.1, "accuracy": 1.0, "crit_chance": 0.0,
+         "crit_damage": 0.0, "max_range": 300.0,
+         "scaling_stats": [["stat_ranged_damage", 1.0]], "proc_effects": []},
         {"id": "weapon_pistol", "name": "Pistol", "tier": 1, "sets": ["Gun"],
-         "dps_at_zero_rd": 5.0, "dps_slope_per_rd": 0.5,
-         "cycle_time": 0.6, "cooldown": 30, "scaling_stats": []},
+         "weapon_type": "ranged", "base_damage": 1.0, "cooldown": 48.0,
+         "recoil_duration": 0.1, "accuracy": 1.0, "crit_chance": 0.0,
+         "crit_damage": 0.0, "max_range": 300.0,
+         "scaling_stats": [["stat_ranged_damage", 1.0]], "proc_effects": []},
     ],
     "items": [
         {"id": "item_dynamite", "name": "Dynamite", "tags": ["explosive"],
@@ -94,8 +105,8 @@ def test_evaluate_run_realized_stats_reflect_gain_modifier():
 
 def test_evaluate_run_ranks_weapons_at_displayed_stats_not_raw():
     r = answers.evaluate_run(DS_RANGER_GAIN, _run(stats={"ranged_damage": 8}))
-    # SMG at displayed RD 12: 10 + 1.0*12 = 22 (would be 18 at raw RD 8)
-    assert r["weapon_dps_ranking"][0]["dps"] == 22.0
+    # SMG at displayed RD 12: per_hit 1+12=13 / ct 0.5 = 26 (would be 18 at raw RD 8)
+    assert r["weapon_dps_ranking"][0]["dps"] == 26.0
 
 
 def test_evaluate_run_reports_character_and_context():
@@ -108,7 +119,18 @@ def test_evaluate_run_reports_character_and_context():
 
 def test_evaluate_run_passes_through_realized_stats():
     r = answers.evaluate_run(DS, _run(stats={"ranged_damage": 8, "range": 80}))
-    assert r["realized_stats"] == {"ranged_damage": 8, "range": 80}
+    assert r["realized_stats"] == {"ranged_damage": 8, "range": 80, "level": 3}
+
+
+def test_evaluate_run_feeds_save_level_into_stat_levels_scaling():
+    # SMG rescaled to stat_levels: per_hit = 1 + 1.0 x level. The save's
+    # current_level 3 must reach the DPS math -> per_hit 4 / ct 0.5 = 8.0
+    # (a dropped level would yield 2.0).
+    ds = copy.deepcopy(DS)
+    ds["weapons"][0]["scaling_stats"] = [["stat_levels", 1.0]]
+    r = answers.evaluate_run(ds, _run(weapons=[{"weapon_id": "weapon_smg", "tier": "0"}],
+                                      stats={}))
+    assert r["weapon_dps_ranking"][0]["dps"] == 8.0
 
 
 def test_evaluate_run_ranks_weapon_dps_at_realized_stats():
@@ -215,3 +237,34 @@ def test_evaluate_run_reports_class_synergy():
 def test_evaluate_run_class_synergy_empty_without_bonus():
     r = answers.evaluate_run(DS, _run())
     assert r["class_synergy"]["bonuses"] == []
+
+
+def test_evaluate_run_includes_top_stat_gradient():
+    r = answers.evaluate_run(DS, _run(stats={"ranged_damage": 8}))
+    gradient = r["top_stat_gradient"]
+    assert len(gradient) > 0
+    assert len(gradient) <= 5
+    deltas = [row["dps_delta"] for row in gradient]
+    assert deltas == sorted(deltas, reverse=True)
+
+
+DS_MELEE = copy.deepcopy(DS)
+DS_MELEE["weapons"] = [
+    {"id": "weapon_knife", "name": "Knife", "tier": 1, "sets": ["Blade"],
+     "weapon_type": "melee", "base_damage": 9.0, "cooldown": 25.0,
+     "recoil_duration": 0.1, "accuracy": 1.0, "crit_chance": 0.0,
+     "crit_damage": 0.0, "max_range": 150.0,
+     "scaling_stats": [["stat_melee_damage", 0.8]], "proc_effects": []},
+]
+
+
+def test_evaluate_run_melee_weapon_ranking_responds_to_melee_damage():
+    # Two saves differing only in melee_damage should produce different
+    # DPS on the melee weapon's ranking row -- the stat-aware engine
+    # scales melee weapons too, not just ranged_damage.
+    weapons = [{"weapon_id": "weapon_knife", "tier": "0"}]
+    r_low = answers.evaluate_run(
+        DS_MELEE, _run(weapons=weapons, stats={"melee_damage": 0}))
+    r_high = answers.evaluate_run(
+        DS_MELEE, _run(weapons=weapons, stats={"melee_damage": 20}))
+    assert r_low["weapon_dps_ranking"][0]["dps"] != r_high["weapon_dps_ranking"][0]["dps"]

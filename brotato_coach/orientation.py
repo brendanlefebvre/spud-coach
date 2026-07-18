@@ -71,24 +71,41 @@ the explain_stat tool).
   ranged-damage gains) multiply the raw sum of collected bonuses at display
   time: raw +6 ranged damage shows as +9. Use stat_display_value to convert.
 
-## What the precomputed numbers mean
+## How the DPS engine works
 
-The DPS model is deliberately narrow and honest about it:
+The DPS model computes realized, stat-aware DPS at YOUR stat block — it is
+not a baseline figure you have to hand-scale yourself:
 
-- **DPS is a line in ranged damage (RD).** Each weapon record carries
-  dps_at_zero_rd and dps_slope_per_rd; realized base DPS at a build is
-  dps_at_zero_rd + dps_slope_per_rd x RD. The slope is specifically the
-  weapon's stat_ranged_damage scaling coefficient — weapons that scale
-  with OTHER stats (melee damage, elemental, engineering, ...) have slope
-  0 and their scaling lives only in scaling_stats; the served DPS number
-  does NOT grow with those stats. Check scaling_stats before comparing
-  across scaling types.
-- **Baseline.** dps_at_zero_rd is computed at a zero-stat baseline — ALL
-  player stats at zero; the weapon's own accuracy is already folded in.
-- **cycle_time** is seconds per attack cycle: recoil_duration x 2 +
-  cooldown/60, plus any burst-reload amortization.
-- **Crit is NOT modeled.** crit_chance and crit_damage appear on the record
-  but are not folded into any DPS line.
+- **DPS is realized expected DPS at your full stat block.** weapon_dps /
+  compare_weapons / evaluate_run resolve every scaling stat the weapon
+  actually has (ranged damage, melee damage, elemental damage,
+  engineering, ...), %damage, attack speed, and expected crit (crit
+  chance x crit damage) — game-exactly, including the game's own integer
+  truncation/rounding at each arithmetic step. attack speed also drives
+  cycle_time (see cadence below), with a melee-specific extra: the
+  back-swing portion of a melee cycle shrinks by (1 + 3 x attack_speed),
+  three times as sensitive to attack speed as the rest of the cycle.
+  Because the arithmetic is integer, a small stat bump can land on a
+  zero-delta step rather than a smooth increase — stat_gradient defaults
+  to a step of +10 for this reason; don't read meaning into a raw +1 test.
+- **Assumptions are surfaced per call, explicitly.** Every weapon_dps /
+  compare_weapons result carries an `assumptions` object: `aoe_enemies_hit`
+  (how many enemies an AoE proc is assumed to catch), `engagement_distance`
+  for melee weapons (defaults to `min(max_range, 70)` — melee cycle time
+  depends on distance-to-target; override it if your playstyle engages
+  closer or farther), and `set_bonuses_applied`. Weapon-CLASS set bonuses
+  (Blade/Gun/Elemental/... thresholds, see get_weapon_class_set) are
+  opt-in: pass `loadout` to report which are active, and
+  `apply_set_bonuses=True` to fold them into the stats you handed in —
+  only do this for a manually-typed stat block. Screen/save-derived stats
+  (what evaluate_run reads from a run.json) already include any active set
+  bonuses, so applying them again would double-count.
+- **cycle_time** is seconds per attack cycle, now stat-aware: ranged is
+  2 x recoil_duration' (recoil_duration shrunk by attack speed); melee is
+  atk_duration/2 + back_duration + recoil_duration', where atk_duration
+  grows with the assumed engagement distance and back_duration carries the
+  triple-attack-speed sensitivity above; either includes burst-reload
+  amortization where it applies.
 - **Cadence IS surfaced; cross-weapon sync is intentionally not scored.**
   dps is a steady-state AVERAGE. weapon_dps / compare_weapons / evaluate_run
   now also return a `cadence` object per weapon: attacks_per_second,
@@ -105,16 +122,29 @@ The DPS model is deliberately narrow and honest about it:
   (every 100) fire fast then take a long reload; `burst_reload: true` marks
   them. attacks_per_second is the average, not the felt fast-then-reload
   rhythm — flag this when it matters.
-- **Proc lines.** proc_dps_at_zero_rd / proc_dps_slope_per_rd add expected
-  on-hit proc damage from three verified damage sources:
+- **Proc lines.** `proc_dps` (part of every weapon_dps/compare_weapons
+  result, alongside `base_dps`) adds expected on-hit proc damage from three
+  verified damage sources, re-run through the SAME stat-aware pipeline as
+  the direct hit — proc modeling is unchanged in spirit, but no longer
+  frozen at a baseline:
   - weapon_damage (exploding): the explosion re-deals the weapon's own
-    damage line. The engine EXCLUDES the directly-hit enemy from the blast,
-    so the model's enemies_hit default of 1.0 means "one OTHER enemy is
-    caught" — the proc is worth ZERO against a lone target (bosses!);
-    override enemies_hit down for single-target reasoning, up for crowds.
-  - burn_dot: burns tick every 0.5s for the burn's flat damage; re-ignition
-    refreshes (max-based), never stacks. The line assumes steady-state
-    (continuous attacking keeps the burn up).
+    (stat-aware) damage line. The engine EXCLUDES the directly-hit enemy
+    from the blast, so the model's enemies_hit default of 1.0 means "one
+    OTHER enemy is caught" — the proc is worth ZERO against a lone target
+    (bosses!); override enemies_hit down for single-target reasoning, up
+    for crowds.
+  - burn_dot: burns tick every 0.5s for the burn's flat damage, now
+    resolved through the burn's own scaling_stats — a burn that scales
+    with elemental damage genuinely grows with elemental damage instead of
+    reporting a flat baseline number. Re-ignition refreshes (max-based),
+    never stacks; the line assumes steady-state (continuous attacking
+    keeps the burn up). CAVEAT: that steady-state eligibility is decided
+    at dataset-build time from the weapon's zero-attack-speed cycle time,
+    so it can be wrong in both directions at runtime — heavily NEGATIVE
+    attack speed slows the cycle past the burn window and the static line
+    then overstates burn uptime, while burns with chance < 100% are
+    excluded entirely even though a fast weapon proccing at, say, 50%
+    sustains real burn DPS the model reports as zero.
   - companion_ranged_stats (lightning/spawned projectiles): spawned
     projectiles carry their OWN damage and scaling, independent of the host
     weapon. Targeted chains assume the nominal chain fully connects
@@ -124,13 +154,22 @@ The DPS model is deliberately narrow and honest about it:
   - Two player-level stats lift exploding weapons ABOVE these lines and are
     NOT modeled here, so builds stacking them out-damage the static numbers.
     explosion_damage is a % damage bonus that stacks additively with % Damage:
-    at the zero-stat baseline multiply the exploding weapon's line by
+    at zero other %damage, multiply the exploding weapon's reported DPS by
     (1 + explosion_damage/100) — a +15 item -> x1.15 — and note it lifts the
     DIRECT line too, not just the proc. On a build already at +P% damage it
     adds into that bucket (-> 1 + (P+explosion_damage)/100), not another
     multiply. explosion_size widens the blast radius (x(1 + explosion_size/100))
     so more enemies are caught; density-dependent with no closed form, so
     raise the enemies_hit you assume for such builds.
+- **Still NOT modeled.** nb_projectiles is NOT multiplied into DPS (spread
+  and pierce hit-rates depend on enemy density/positioning with no closed
+  form); character class bonuses (e.g. Crazy's +100 range to Precise
+  weapons) are surfaced advisorily via evaluate_run's class_synergy /
+  get_character, not consumed by weapon_dps; the cooldown-jitter model
+  covers the verified dead-window RANGE but not a floor-skew bias in how
+  often a cooldown lands near its low end; and survivability (armor,
+  dodge, HP, regen, lifesteal) is entirely out of scope — this is a DPS
+  engine only, see stat_gradient's own "DPS gradient only" caveat.
 - **classified_effects.** Non-DPS effects are classified, with metadata,
   into 9 categories: stat_rider (flat stat granted while held), dynamic
   (state/time-dependent, no honest static number), economy (gold
@@ -169,15 +208,19 @@ the data itself.
   matches.
 - `stats` parameters take short names (e.g. ranged_damage); explain_stat
   and stat_display_value take the stat_-prefixed form (stat_ranged_damage).
-- weapon_dps / compare_weapons rank by the RD line above — for merge-order
-  questions use compare_merge_paths; for whole-run post-mortems pass the
-  run.json to evaluate_run.
+- weapon_dps / compare_weapons rank by the realized DPS above — for
+  merge-order questions use compare_merge_paths; for 'which stat should I
+  buy next' use stat_gradient; for whole-run post-mortems pass the run.json
+  to evaluate_run.
 - **Class bonuses are build context, not DPS deltas.** A character's
   class_bonuses (e.g. Crazy's +100 range to Precise weapons) grant a stat to
-  weapons of one set. The RD-only DPS line does NOT consume range,
-  attack-speed, or lifesteal, so these do not move weapon_dps numbers — read
-  them from get_character or evaluate_run's class_synergy section as synergy
-  guidance (favor the boosted set), not as a DPS change.
+  weapons of one set. The stat-aware DPS engine does NOT go looking for these
+  grants and apply them on your behalf — it only consumes what's IN the
+  `stats` you pass it (raw range, for instance, doesn't move DPS anyway
+  since it's a cadence/positioning stat, not a damage scalar) — so read
+  class_bonuses from get_character or evaluate_run's class_synergy section
+  as synergy guidance (favor the boosted set), not as an automatic DPS
+  change.
 - **weapon_dps / compare_weapons need DISPLAYED stats, not raw ones.** A
   run.json's `effects` block stores the RAW pre-gain-modifier accumulator
   (see "Gain modifiers" above) — feeding that straight in silently

@@ -1,4 +1,4 @@
-import math
+import pytest
 
 from brotato_coach.builders.weapons import build_weapon_record
 
@@ -35,33 +35,110 @@ def test_weapon_record_core_fields():
     assert rec["can_have_negative_knockback"] is False
 
 
-def test_weapon_record_precomputed_dps_line():
+# --- Knife T1 fixture: real melee weapon .tres content (script ext_resource
+# identifies the weapon-type stats script), used for the raw-field tests. ---
+KNIFE_STATS = """[gd_resource type="Resource" format=2]
+[ext_resource path="res://weapons/weapon_stats/melee_weapon_stats.gd" type="Script" id=1]
+[resource]
+script = ExtResource( 1 )
+cooldown = 25
+damage = 9
+accuracy = 1.0
+crit_chance = 0.2
+crit_damage = 2.5
+max_range = 150
+knockback = 2
+can_have_negative_knockback = false
+scaling_stats = [ [ "stat_melee_damage", 0.8 ] ]
+recoil_duration = 0.1
+additional_cooldown_every_x_shots = -1
+additional_cooldown_multiplier = -1.0
+"""
+
+KNIFE_DATA = """[gd_resource type="Resource" format=2]
+[resource]
+weapon_id = "weapon_knife"
+tier = 1
+effects = [  ]
+"""
+
+PISTOL_STATS = """[gd_resource type="Resource" format=2]
+[ext_resource path="res://weapons/weapon_stats/ranged_weapon_stats.gd" type="Script" id=1]
+[resource]
+script = ExtResource( 1 )
+cooldown = 60
+damage = 12
+accuracy = 0.9
+crit_chance = 0.1
+crit_damage = 2.0
+max_range = 400
+knockback = 15
+can_have_negative_knockback = false
+scaling_stats = [ [ "stat_ranged_damage", 1.0 ] ]
+recoil_duration = 0.1
+"""
+
+
+def build_knife_t1():
+    return build_weapon_record(KNIFE_STATS, KNIFE_DATA, weapon_id="weapon_knife",
+                               name="Knife", tier=1)
+
+
+def build_pistol_t1():
+    return build_weapon_record(PISTOL_STATS, KNIFE_DATA, weapon_id="weapon_pistol",
+                               name="Pistol", tier=1)
+
+
+def build_weapon_with_scaling(scaling_stats):
+    scaling_str = "[ " + ", ".join(
+        f'[ "{n}", {c} ]' for n, c in scaling_stats) + " ]"
+    stats = ('[gd_resource type="Resource" format=2]\n[resource]\n'
+             'cooldown = 45\ndamage = 25\naccuracy = 1.0\nrecoil_duration = 0.15\n'
+             f'scaling_stats = {scaling_str}\n')
+    data = '[gd_resource type="Resource" format=2]\n[resource]\neffects = [  ]\n'
+    return build_weapon_record(stats, data, weapon_id="w", name="W", tier=1)
+
+
+def test_record_carries_raw_timing_and_type_fields():
+    rec = build_knife_t1()
+    assert rec["weapon_type"] == "melee"
+    assert rec["recoil_duration"] == pytest.approx(0.1)
+    assert rec["max_range"] == 150.0
+    assert rec["attack_speed_mod"] == 0.0
+    assert rec["additional_cooldown_every_x_shots"] == -1
+    for dropped in ("cycle_time", "dps_at_zero_rd", "dps_slope_per_rd",
+                    "proc_dps_at_zero_rd", "proc_dps_slope_per_rd"):
+        assert dropped not in rec
+
+
+def test_record_detects_ranged_weapon_type():
+    rec = build_pistol_t1()
+    assert rec["weapon_type"] == "ranged"
+
+
+def test_record_weapon_type_defaults_ranged_without_script_ext_resource():
+    # Fixtures without a script ext_resource (most tests in this file) fall
+    # back to "ranged" rather than raising.
     rec = build_weapon_record(STATS, DATA, weapon_id="weapon_shredder",
                               name="Shredder", tier=4)
-    assert math.isclose(rec["cycle_time"], 1.05, rel_tol=1e-6)
-    assert math.isclose(rec["dps_at_zero_rd"], 23.8095, rel_tol=1e-4)
-    assert math.isclose(rec["dps_slope_per_rd"], 0.47619, rel_tol=1e-4)
+    assert rec["weapon_type"] == "ranged"
 
 
-def test_weapon_record_burst_folds_into_cycle_time():
+def test_unknown_scaling_stat_fails_build():
+    with pytest.raises(ValueError, match="unknown scaling stat"):
+        build_weapon_with_scaling([["stat_bananas", 1.0]])
+
+
+def test_weapon_record_burst_reload_raw_fields():
     stats = ('[gd_resource type="Resource" format=2]\n[resource]\n'
              'cooldown = 11\ndamage = 40\naccuracy = 0.9\nrecoil_duration = 0.1\n'
              'scaling_stats = [ [ "stat_ranged_damage", 2.0 ] ]\n'
              'additional_cooldown_every_x_shots = 6\nadditional_cooldown_multiplier = 8.0\n')
     data = '[gd_resource type="Resource" format=2]\n[resource]\neffects = [  ]\n'
     rec = build_weapon_record(stats, data, weapon_id="w", name="W", tier=4)
-    # Revolver T4 golden: cycle ~0.62778, dps0 ~57.35, slope ~2.8673
-    assert abs(rec["cycle_time"] - 0.62778) < 1e-3
-    assert abs(rec["dps_at_zero_rd"] - 57.35) < 1e-2
-
-
-def test_weapon_record_rd_absent_slope_zero():
-    stats = ('[gd_resource type="Resource" format=2]\n[resource]\n'
-             'cooldown = 60\ndamage = 10\naccuracy = 1.0\nrecoil_duration = 0.0\n'
-             'scaling_stats = [ [ "stat_elemental_damage", 1.0 ] ]\n')
-    data = '[gd_resource type="Resource" format=2]\n[resource]\neffects = [  ]\n'
-    rec = build_weapon_record(stats, data, weapon_id="w", name="W", tier=1)
-    assert rec["dps_slope_per_rd"] == 0.0
+    assert rec["additional_cooldown_every_x_shots"] == 6
+    assert rec["additional_cooldown_multiplier"] == 8.0
+    assert rec["burst_reload"] is True
 
 
 def test_weapon_record_populates_effects_and_classes():
@@ -110,16 +187,15 @@ PROC_MODEL = {"effect_explode_custom": {
 }}
 
 
-def test_weapon_record_proc_line_from_model():
+def test_weapon_record_weapon_damage_proc_descriptor():
     rec = build_weapon_record(STATS, DATA, [EXPLODE_EFFECT], weapon_id="w",
                               name="W", tier=4, proc_models=PROC_MODEL)
-    # base line (23.8095, 0.47619) x chance 0.5
-    assert math.isclose(rec["proc_dps_at_zero_rd"], 11.90475, rel_tol=1e-4)
-    assert math.isclose(rec["proc_dps_slope_per_rd"], 0.238095, rel_tol=1e-4)
+    assert rec["proc_effects"] == [
+        {"kind": "weapon_damage", "chance": 0.5, "enemies_hit": 1.0, "multiplier": 1.0}]
     assert rec["unmodeled_effects"] == []
 
 
-def test_weapon_record_unmodeled_effect_contributes_zero_and_is_listed():
+def test_weapon_record_unmodeled_effect_contributes_no_descriptor_and_is_listed():
     # effect_burning has a PROC_MODELS entry, but this fixture builds it
     # with no burning_data companion resolved, so `bd.get("chance", 0.0)`
     # defaults to 0.0, failing the chance == 1.0 gate and falling back to
@@ -127,8 +203,7 @@ def test_weapon_record_unmodeled_effect_contributes_zero_and_is_listed():
     burning_effect = EXPLODE_EFFECT.replace("effect_explode_custom", "effect_burning")
     rec = build_weapon_record(STATS, DATA, [burning_effect], weapon_id="w",
                               name="W", tier=4)
-    assert rec["proc_dps_at_zero_rd"] == 0.0
-    assert rec["proc_dps_slope_per_rd"] == 0.0
+    assert rec["proc_effects"] == []
     assert rec["unmodeled_effects"] == ["effect_burning"]
 
 
@@ -137,13 +212,14 @@ def test_default_proc_models_cover_explode_keys():
         effect = EXPLODE_EFFECT.replace("effect_explode_custom", key)
         rec = build_weapon_record(STATS, DATA, [effect], weapon_id="w",
                                   name="W", tier=4)  # no injected models: real table
-        assert rec["proc_dps_at_zero_rd"] > 0, key
+        assert rec["proc_effects"] == [
+            {"kind": "weapon_damage", "chance": 0.5, "enemies_hit": 1.0, "multiplier": 1.0}], key
         assert rec["unmodeled_effects"] == [], key
 
 
-def test_weapon_record_no_effects_has_zero_proc_fields():
+def test_weapon_record_no_effects_has_no_proc_effects():
     rec = build_weapon_record(STATS, DATA, weapon_id="w", name="W", tier=4)
-    assert rec["proc_dps_at_zero_rd"] == 0.0
+    assert rec["proc_effects"] == []
     assert rec["unmodeled_effects"] == []
 
 
@@ -208,7 +284,7 @@ def _burning_data(chance=1.0, damage=3, duration=3):
             'is_global_burn = false\n')
 
 
-def test_weapon_record_burn_dot_contributes_when_preconditions_hold():
+def test_weapon_record_burn_dot_descriptor_when_preconditions_hold():
     # Torch T1: cooldown 31 frames, recoil 0.1 -> cycle_time ~0.717s;
     # duration 3 ticks * 0.5s tick_interval = 1.5s window comfortably
     # sustains continuous uptime.
@@ -217,8 +293,9 @@ def test_weapon_record_burn_dot_contributes_when_preconditions_hold():
              'scaling_stats = [ [ "stat_melee_damage", 1.0 ] ]\n')
     rec = build_weapon_record(stats, DATA, [BURNING_EFFECT], [{"burning_data": _burning_data()}],
                               weapon_id="w", name="W", tier=1)
-    assert math.isclose(rec["proc_dps_at_zero_rd"], 6.0)  # 3 damage / 0.5s
-    assert rec["proc_dps_slope_per_rd"] == 0.0
+    assert rec["proc_effects"] == [
+        {"kind": "burn_dot", "damage": 3.0,
+         "scaling_stats": [["stat_elemental_damage", 1.0]], "tick_interval": 0.5}]
     assert rec["unmodeled_effects"] == []
 
 
@@ -229,7 +306,7 @@ def test_weapon_record_burn_dot_falls_back_when_cycle_time_exceeds_window():
              'scaling_stats = [ [ "stat_melee_damage", 1.0 ] ]\n')
     rec = build_weapon_record(stats, DATA, [BURNING_EFFECT], [{"burning_data": _burning_data()}],
                               weapon_id="w", name="W", tier=1)
-    assert rec["proc_dps_at_zero_rd"] == 0.0
+    assert rec["proc_effects"] == []
     assert rec["unmodeled_effects"] == ["effect_burning"]
 
 
@@ -237,23 +314,23 @@ def test_weapon_record_burn_dot_falls_back_when_chance_below_one():
     rec = build_weapon_record(STATS, DATA, [BURNING_EFFECT],
                               [{"burning_data": _burning_data(chance=0.5)}],
                               weapon_id="w", name="W", tier=1)
-    assert rec["proc_dps_at_zero_rd"] == 0.0
+    assert rec["proc_effects"] == []
     assert rec["unmodeled_effects"] == ["effect_burning"]
 
 
 def test_weapon_record_burn_dot_falls_back_without_burning_data():
     rec = build_weapon_record(STATS, DATA, [BURNING_EFFECT],
                               weapon_id="w", name="W", tier=1)
-    assert rec["proc_dps_at_zero_rd"] == 0.0
+    assert rec["proc_effects"] == []
     assert rec["unmodeled_effects"] == ["effect_burning"]
 
 
 def test_weapon_record_burn_dot_falls_back_when_damage_missing():
     # chance == 1.0 and duration comfortably clear the window gate (same
-    # cycle_time setup as test_weapon_record_burn_dot_contributes_when_
+    # cycle_time setup as test_weapon_record_burn_dot_descriptor_when_
     # preconditions_hold), but the burning_data companion has no `damage`
-    # key at all. This must NOT be modeled as a 0-DPS contribution -- it
-    # must fall back to unmodeled_effects, same as any other missing field.
+    # key at all. This must NOT be modeled as a descriptor -- it must fall
+    # back to unmodeled_effects, same as any other missing field.
     burning_data_no_damage = (
         '[gd_resource type="Resource" format=2]\n[resource]\n'
         'chance = 1.0\nduration = 3\nspread = 0\n'
@@ -264,8 +341,7 @@ def test_weapon_record_burn_dot_falls_back_when_damage_missing():
              'scaling_stats = [ [ "stat_melee_damage", 1.0 ] ]\n')
     rec = build_weapon_record(stats, DATA, [BURNING_EFFECT], [{"burning_data": burning_data_no_damage}],
                               weapon_id="w", name="W", tier=1)
-    assert rec["proc_dps_at_zero_rd"] == 0.0
-    assert rec["proc_dps_slope_per_rd"] == 0.0
+    assert rec["proc_effects"] == []
     assert rec["unmodeled_effects"] == ["effect_burning"]
 
 
@@ -313,14 +389,15 @@ LIGHTNING_HOST = ('[gd_resource type="Resource" format=2]\n[resource]\n'
                   'scaling_stats = [ [ "stat_melee_damage", 1.0 ] ]\n')
 
 
-def test_weapon_record_targeted_companion_proc_counts_chain():
+def test_weapon_record_targeted_companion_descriptor_counts_chain():
     # bounce 3 (lightning_shiv T4-style chain) -> enemies_hit 1+3
     rec = build_weapon_record(LIGHTNING_HOST, DATA, [_projectile_effect()],
                               [{"weapon_stats": _companion_stats(bounce=3)}],
                               weapon_id="w", name="W", tier=1)
-    # 5 dmg * 1 spawn * 4 enemies / 0.65s
-    assert math.isclose(rec["proc_dps_at_zero_rd"], 30.7692, rel_tol=1e-4)
-    assert rec["proc_dps_slope_per_rd"] == 0.0
+    assert rec["proc_effects"] == [
+        {"kind": "companion", "damage": 5.0,
+         "scaling_stats": [["stat_elemental_damage", 0.8]],
+         "crit_chance": 0.0, "crit_damage": 0.0, "count": 1.0, "enemies_hit": 4.0}]
     assert rec["unmodeled_effects"] == []
 
 
@@ -329,12 +406,12 @@ def test_weapon_record_targeted_falls_back_on_lossy_bounce():
         LIGHTNING_HOST, DATA, [_projectile_effect()],
         [{"weapon_stats": _companion_stats(bounce=2, bounce_dmg_reduction=0.5)}],
         weapon_id="w", name="W", tier=1)
-    assert rec["proc_dps_at_zero_rd"] == 0.0
+    assert rec["proc_effects"] == []
     assert rec["unmodeled_effects"] == ["effect_lightning_on_hit"]
 
 
-def test_weapon_record_spray_companion_proc_has_rd_slope():
-    # cactus_mace T1: 3 spawns, damage 1, stat_ranged_damage 0.6, host ct 1.25s
+def test_weapon_record_spray_companion_descriptor_carries_scaling_stats():
+    # cactus_mace T1: 3 spawns, damage 1, stat_ranged_damage 0.6
     host = ('[gd_resource type="Resource" format=2]\n[resource]\n'
             'cooldown = 63\ndamage = 15\naccuracy = 1.0\nrecoil_duration = 0.1\n'
             'scaling_stats = [ [ "stat_melee_damage", 0.8 ] ]\n')
@@ -345,8 +422,10 @@ def test_weapon_record_spray_companion_proc_has_rd_slope():
             damage=1, scaling='[ [ "stat_ranged_damage", 0.6 ] ]',
             bounce=0, bounce_dmg_reduction=0.5)}],
         weapon_id="w", name="W", tier=1)
-    assert math.isclose(rec["proc_dps_at_zero_rd"], 2.4, rel_tol=1e-6)
-    assert math.isclose(rec["proc_dps_slope_per_rd"], 1.44, rel_tol=1e-6)
+    assert rec["proc_effects"] == [
+        {"kind": "companion", "damage": 1.0,
+         "scaling_stats": [["stat_ranged_damage", 0.6]],
+         "crit_chance": 0.0, "crit_damage": 0.0, "count": 3.0, "enemies_hit": 1.0}]
     assert rec["unmodeled_effects"] == []
 
 
@@ -356,14 +435,14 @@ def test_weapon_record_spray_falls_back_when_bouncing():
         [_projectile_effect(key="EFFECT_PROJECTILES_ON_HIT", value=8, auto_target="false")],
         [{"weapon_stats": _companion_stats(bounce=1, bounce_dmg_reduction=0.5)}],
         weapon_id="w", name="W", tier=3)
-    assert rec["proc_dps_at_zero_rd"] == 0.0
+    assert rec["proc_effects"] == []
     assert rec["unmodeled_effects"] == ["EFFECT_PROJECTILES_ON_HIT"]
 
 
 def test_weapon_record_companion_proc_falls_back_without_companion():
     rec = build_weapon_record(LIGHTNING_HOST, DATA, [_projectile_effect()],
                               weapon_id="w", name="W", tier=1)
-    assert rec["proc_dps_at_zero_rd"] == 0.0
+    assert rec["proc_effects"] == []
     assert rec["unmodeled_effects"] == ["effect_lightning_on_hit"]
 
 
@@ -375,7 +454,7 @@ def test_weapon_record_targeted_companion_defaults_can_bounce_true():
     rec = build_weapon_record(LIGHTNING_HOST, DATA, [_projectile_effect()],
                               [{"weapon_stats": companion}],
                               weapon_id="w", name="W", tier=1)
-    assert math.isclose(rec["proc_dps_at_zero_rd"], 30.7692, rel_tol=1e-4)
+    assert rec["proc_effects"][0]["enemies_hit"] == 4.0
 
 
 def test_weapon_record_targeted_can_bounce_false_forces_single_hit():
@@ -386,8 +465,11 @@ def test_weapon_record_targeted_can_bounce_false_forces_single_hit():
     rec = build_weapon_record(LIGHTNING_HOST, DATA, [_projectile_effect()],
                               [{"weapon_stats": companion}],
                               weapon_id="w", name="W", tier=1)
-    # forced bounce=0 passes the gate; 5 dmg * 1 spawn * 1 enemy / 0.65s
-    assert math.isclose(rec["proc_dps_at_zero_rd"], 7.6923, rel_tol=1e-4)
+    # forced bounce=0 passes the gate
+    assert rec["proc_effects"] == [
+        {"kind": "companion", "damage": 5.0,
+         "scaling_stats": [["stat_elemental_damage", 0.8]],
+         "crit_chance": 0.0, "crit_damage": 0.0, "count": 1.0, "enemies_hit": 1.0}]
     assert rec["unmodeled_effects"] == []
 
 
@@ -399,7 +481,7 @@ def test_weapon_record_companion_omitting_bounce_fields_uses_engine_defaults():
     rec = build_weapon_record(LIGHTNING_HOST, DATA, [_projectile_effect()],
                               [{"weapon_stats": companion}],
                               weapon_id="w", name="W", tier=1)
-    assert math.isclose(rec["proc_dps_at_zero_rd"], 7.6923, rel_tol=1e-4)
+    assert rec["proc_effects"][0]["enemies_hit"] == 1.0
     assert rec["unmodeled_effects"] == []
 
 

@@ -2,11 +2,20 @@ import asyncio
 
 from brotato_coach.server import build_server
 
+# Raw stat-aware fields (schema v6): base_damage 10.0 + 1.0x ranged_damage per
+# hit (int, no crit/percent-damage modifiers) over cycle_time = 2 x
+# recoil_duration + cooldown/60 = 0.1s + 0.1s = 0.2s exactly (cooldown 6.0 is
+# above the game's 2-frame minimum, so it isn't clamped), so
+# dps == per_hit_damage / 0.2 == per_hit_damage * 5 (clean numbers for
+# hand-verified goldens below).
 DS = {
     "schema_version": 1, "game_version": "dev", "generated_at": "t",
     "weapons": [{"id": "weapon_minigun", "name": "Minigun", "tier": 4,
-                 "dps_at_zero_rd": 55.5556, "dps_slope_per_rd": 8.3333,
-                 "cycle_time": 0.09, "cooldown": 3, "scaling_stats": []}],
+                 "weapon_type": "ranged", "base_damage": 10.0, "cooldown": 6.0,
+                 "recoil_duration": 0.05, "accuracy": 1.0, "crit_chance": 0.0,
+                 "crit_damage": 0.0, "max_range": 400.0,
+                 "scaling_stats": [["stat_ranged_damage", 1.0]],
+                 "proc_effects": []}],
     "items": [], "characters": [], "sets": [], "stat_mechanics": {},
 }
 
@@ -41,7 +50,8 @@ def test_weapon_dps_tool():
     server = build_server(DS)
     result = asyncio.run(_call(server, "weapon_dps", name="Minigun", tier=4,
                                stats={"ranged_damage": 10}))
-    assert round(result["dps"]) == round(55.5556 + 8.3333 * 10)
+    # per_hit 10+10=20 / ct 0.2 = 100.0
+    assert round(result["dps"]) == 100
 
 
 def _tool_list(server):
@@ -84,11 +94,13 @@ def test_typed_stats_param_accepts_plain_dict():
 
 def test_weapon_dps_tool_reports_proc_fields():
     ds = {**DS, "weapons": [{**DS["weapons"][0],
-          "proc_dps_at_zero_rd": 5.0, "proc_dps_slope_per_rd": 0.5,
+          "proc_effects": [{"kind": "weapon_damage", "chance": 0.5,
+                            "enemies_hit": 1.0, "multiplier": 1.0}],
           "unmodeled_effects": ["effect_burning"]}]}
     result = asyncio.run(_call(build_server(ds), "weapon_dps", name="Minigun",
                                tier=4, stats={"ranged_damage": 10}))
-    assert round(result["proc_dps"], 4) == 10.0
+    # base_dps 100.0 (see DS docstring); 50% weapon-damage proc -> 50.0
+    assert round(result["proc_dps"], 4) == 50.0
     assert result["unmodeled_effects"] == ["effect_burning"]
 
 
@@ -99,8 +111,9 @@ def test_weapon_dps_tool_character_param_applies_gain_modifier():
     server = build_server(ds)
     result = asyncio.run(_call(server, "weapon_dps", name="Minigun", tier=4,
                                stats={"ranged_damage": 6}, character="Ranger"))
-    # raw RD 6 -> displayed RD 9 via Ranger's +50% gain modifier
-    assert round(result["dps"], 2) == round(55.5556 + 8.3333 * 9, 2)
+    # raw RD 6 -> displayed RD 9 via Ranger's +50% gain modifier;
+    # per_hit 10+9=19 / ct 0.2 = 95.0
+    assert round(result["dps"], 2) == 95.0
 
 
 def test_compare_weapons_tool_character_param_applies_gain_modifier():
@@ -111,7 +124,7 @@ def test_compare_weapons_tool_character_param_applies_gain_modifier():
     result = asyncio.run(_call(server, "compare_weapons",
                                names_with_tiers=[["Minigun", 4]],
                                stats={"ranged_damage": 6}, character="Ranger"))
-    assert round(result["ranking"][0]["dps"], 2) == round(55.5556 + 8.3333 * 9, 2)
+    assert round(result["ranking"][0]["dps"], 2) == 95.0
 
 
 def test_loadout_set_bonuses_tool():
@@ -131,7 +144,11 @@ def test_loadout_set_bonuses_tool():
 _RUN_DS = {
     **DS,
     "weapons": [{"id": "weapon_smg", "name": "SMG", "tier": 1, "sets": ["Gun"],
-                 "dps_at_zero_rd": 10.0, "dps_slope_per_rd": 1.0, "scaling_stats": []}],
+                 "weapon_type": "ranged", "base_damage": 5.0, "cooldown": 0.0,
+                 "recoil_duration": 0.05, "accuracy": 1.0, "crit_chance": 0.0,
+                 "crit_damage": 0.0, "max_range": 300.0,
+                 "scaling_stats": [["stat_ranged_damage", 1.0]],
+                 "proc_effects": []}],
     "characters": [{"id": "character_ranger", "name": "Ranger",
                     "gain_modifiers": [], "wanted_tags": [],
                     "banned_item_groups": [], "flat_bonuses": [],
@@ -165,7 +182,7 @@ def test_evaluate_run_tool_from_inline_json():
                                run_json=_minimal_run()))
     assert result["run"]["character"] == "Ranger"
     assert result["run"]["wave"] == 5
-    assert result["realized_stats"] == {"ranged_damage": 12}
+    assert result["realized_stats"] == {"ranged_damage": 12, "level": 4}
     assert result["weapon_dps_ranking"][0]["name"] == "SMG"
 
 
@@ -267,3 +284,71 @@ def test_get_filter_options_tool_bestiary_fields():
     assert result["enemy_abilities"] == ["charger"]
     assert result["attack_kinds"] == ["melee"]
     assert result["enemy_appears_in"] == ["normal"]
+
+
+def test_stat_gradient_tool_registered_and_listed():
+    names = {t.name for t in _tool_list(build_server(DS))}
+    assert "stat_gradient" in names
+
+
+def test_stat_gradient_tool_ranks_stats():
+    result = asyncio.run(_call(build_server(DS), "stat_gradient",
+                               weapons=[["Minigun", 4]],
+                               stats={"ranged_damage": 10}))
+    assert "gradient" in result
+    assert result["gradient"][0]["stat"] == "ranged_damage"
+
+
+def test_weapon_dps_tool_result_carries_assumptions():
+    result = asyncio.run(_call(build_server(DS), "weapon_dps", name="Minigun",
+                               tier=4, stats={"ranged_damage": 10}))
+    assert result["assumptions"]["aoe_enemies_hit"] == 1.0
+    assert result["assumptions"]["set_bonuses_applied"] is False
+
+
+def test_weapon_dps_tool_accepts_loadout_and_apply_set_bonuses():
+    ds = {**DS,
+          "weapons": [{**DS["weapons"][0], "sets": ["Gun"]}],
+          "sets": [{"id": "set_gun", "name": "Gun", "bonuses": [
+              {"count": 1, "effect": {"key": "stat_ranged_damage", "value": 5}}]}]}
+    with_bonus = asyncio.run(_call(build_server(ds), "weapon_dps", name="Minigun",
+                                   tier=4, stats={"ranged_damage": 10},
+                                   loadout=["Minigun"], apply_set_bonuses=True))
+    without_bonus = asyncio.run(_call(build_server(ds), "weapon_dps", name="Minigun",
+                                      tier=4, stats={"ranged_damage": 10}))
+    assert with_bonus["dps"] > without_bonus["dps"]
+    assert with_bonus["assumptions"]["set_bonuses_applied"] is True
+    assert with_bonus["assumptions"]["active_set_bonuses"][0]["effect"]["value"] == 5
+
+
+def test_weapon_dps_tool_accepts_engagement_distance():
+    melee_ds = {**DS, "weapons": [{**DS["weapons"][0], "weapon_type": "melee",
+                                   "max_range": 200.0}]}
+    result = asyncio.run(_call(build_server(melee_ds), "weapon_dps", name="Minigun",
+                               tier=4, stats={"ranged_damage": 10},
+                               engagement_distance=50.0))
+    assert result["assumptions"]["engagement_distance"] == 50.0
+
+
+def test_compare_weapons_tool_accepts_loadout_and_apply_set_bonuses():
+    ds = {**DS,
+          "weapons": [{**DS["weapons"][0], "sets": ["Gun"]}],
+          "sets": [{"id": "set_gun", "name": "Gun", "bonuses": [
+              {"count": 1, "effect": {"key": "stat_ranged_damage", "value": 5}}]}]}
+    result = asyncio.run(_call(build_server(ds), "compare_weapons",
+                               names_with_tiers=[["Minigun", 4]],
+                               stats={"ranged_damage": 10},
+                               loadout=["Minigun"], apply_set_bonuses=True))
+    assert result["ranking"][0]["dps"] > 100.0
+
+
+def test_compare_merge_paths_tool_accepts_stats():
+    server = build_server(DS)
+    baseline = asyncio.run(_call(server, "compare_merge_paths",
+                                 weapon_name="Minigun", path_a=[4], path_b=[4]))
+    with_stats = asyncio.run(_call(server, "compare_merge_paths",
+                                   weapon_name="Minigun", path_a=[4], path_b=[4],
+                                   stats={"damage": 100}))
+    # +100 %damage doubles the guaranteed line at every RD in range, so the
+    # stats param must be threaded through to move the reported DPS.
+    assert with_stats["dps_a_at_range_ends"][0] > baseline["dps_a_at_range_ends"][0]

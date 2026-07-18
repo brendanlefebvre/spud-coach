@@ -47,16 +47,18 @@ def build_server(ds: dict) -> FastMCP:
         they bake in.
 
         Call this ONCE at the start of a session, before any other tool.
-        Without it you will misread the DPS fields (they are RD-parameterized
-        lines at a zero-stat baseline, not realized DPS) and miss the model's
-        documented assumptions.
+        Without it you will misread the DPS numbers (realized, stat-aware DPS
+        at YOUR build, not a baseline figure) and miss the model's documented
+        assumptions (engagement distance, AoE hit count, set-bonus opt-in).
         """
         return _safe(orientation.read_me_payload)(ds=ds)
 
     @mcp.tool()
     def get_weapon(name: str, tier: int | None = None) -> dict[str, Any]:
-        """Look up one weapon's full record: base stats, scaling stats, and the
-        precomputed DPS line (dps_at_zero_rd, dps_slope_per_rd).
+        """Look up one weapon's full record: base stats, scaling stats, proc
+        effects, and set membership. For realized DPS at a build's stats, use
+        weapon_dps instead — this record's raw fields aren't a DPS number by
+        themselves.
 
         Weapons exist at multiple tiers (1-4). Omit `tier` to get every tier that
         matches (returned as `{"matches": [...]}`); pass `tier` to pin one. On a
@@ -128,22 +130,42 @@ def build_server(ds: dict) -> FastMCP:
     def weapon_dps(name: str, tier: int, stats: Stats,
                    aoe_enemies_hit: float = 1.0,
                    character: str | None = None,
-                   weapon_count: int = 1) -> dict[str, Any]:
-        """Compute one weapon's realized DPS for a given build, with a breakdown.
+                   weapon_count: int = 1,
+                   engagement_distance: float | None = None,
+                   loadout: list[str] | None = None,
+                   apply_set_bonuses: bool = False) -> dict[str, Any]:
+        """Compute one weapon's realized, stat-aware DPS for a given build,
+        with a breakdown.
 
-        `dps` = guaranteed line (`base_dps`) + expected on-hit proc damage
-        (`proc_dps`, e.g. exploding projectiles — chance x the weapon's own
-        damage line).
-        `aoe_enemies_hit` scales the proc term for AoE procs (default 1 enemy,
-        conservative). Effect keys the model can't yet value are listed in
-        `unmodeled_effects` — mention them when the number matters. `stats` is
-        the player's current run stats (short names, e.g. ranged_damage); DPS
-        scales linearly with ranged_damage. `stats` must be DISPLAYED values
-        (what the game shows, after the character's stat-gain modifiers) —
-        pass `character` to convert raw save/effects values for you, or
+        `dps` is the weapon's GAME-EXACT expected DPS at your stat block:
+        every scaling stat, %damage, attack speed, and expected crit chance
+        x crit damage are all folded in (integer truncation/rounding included,
+        matching the game's own arithmetic) — not just ranged damage. It
+        decomposes into `base_dps` (the guaranteed hit line) + `proc_dps`
+        (expected on-hit proc damage, e.g. exploding projectiles — chance x
+        the weapon's own damage line). `aoe_enemies_hit` scales the proc term
+        for AoE procs (default 1 enemy, conservative). Effect keys the model
+        can't yet value are listed in `unmodeled_effects` — mention them when
+        the number matters. `stats` is the player's current run stats (short
+        names, e.g. ranged_damage) and must be DISPLAYED values (what the
+        game shows, after the character's stat-gain modifiers) — pass
+        `character` to convert raw save/effects values for you, or
         pre-convert with stat_display_value if `character` is omitted. For
         ranking several weapons, use compare_weapons; for merge-order
-        questions, use compare_merge_paths.
+        questions, use compare_merge_paths; for 'which stat should I buy
+        next', use stat_gradient.
+
+        The `assumptions` object reports what was baked into this number:
+        `aoe_enemies_hit`, `engagement_distance` (melee only — defaults to
+        `min(max_range, 70)` when the weapon is melee and you don't override
+        it), and `set_bonuses_applied`. Pass `loadout` (the whole equipped
+        weapon-name list) to report the loadout's active weapon-class set
+        bonuses under `assumptions.active_set_bonuses`; pass
+        `apply_set_bonuses=True` to additionally MERGE those bonuses into
+        `stats` before computing DPS — only do this for stat blocks that
+        don't already include them (a manually-typed build), never for
+        screen/save-derived stats, which already have set bonuses baked in
+        and would double-count them.
 
         `cadence` decomposes DPS into rate x burst: attacks_per_second,
         damage_per_attack, a cadence label (sustained/moderate/bursty),
@@ -158,15 +180,22 @@ def build_server(ds: dict) -> FastMCP:
                                          stats=stats.as_dict(),
                                          aoe_enemies_hit=aoe_enemies_hit,
                                          character=character,
-                                         weapon_count=weapon_count)
+                                         weapon_count=weapon_count,
+                                         engagement_distance=engagement_distance,
+                                         loadout=loadout,
+                                         apply_set_bonuses=apply_set_bonuses)
 
     @mcp.tool()
     def compare_weapons(names_with_tiers: list[tuple[str, int]], stats: Stats,
                         aoe_enemies_hit: float = 1.0,
                         character: str | None = None,
-                        weapon_count: int = 1) -> dict[str, Any]:
-        """Rank several weapons by realized DPS (guaranteed + expected proc
-        damage) at the SAME build stats.
+                        weapon_count: int = 1,
+                        engagement_distance: float | None = None,
+                        loadout: list[str] | None = None,
+                        apply_set_bonuses: bool = False) -> dict[str, Any]:
+        """Rank several weapons by realized, stat-aware DPS (guaranteed +
+        expected proc damage — see weapon_dps for what's folded in) at the
+        SAME build stats.
 
         `names_with_tiers` is a list of [name, tier] pairs, e.g.
         [["Minigun", 4], ["SMG", 4]]. `aoe_enemies_hit` scales proc terms for
@@ -175,32 +204,69 @@ def build_server(ds: dict) -> FastMCP:
         `{"ranking": [...]}` sorted by total DPS descending. Use when the
         player asks 'which of these hits hardest'.
 
+        `engagement_distance`, `loadout`, and `apply_set_bonuses` behave
+        exactly as in weapon_dps: melee cadence assumes engagement at
+        `min(max_range, 70)` unless overridden; `loadout` reports each row's
+        active weapon-class set bonuses; `apply_set_bonuses=True` merges them
+        into `stats` ONLY for stat blocks that don't already include them
+        (screen/save-derived stats already do — don't double them here).
+
         Each row carries a `cadence` object (see weapon_dps). Pass
         `weapon_count` = your equipped weapon count so the gap range reflects
         the engine's weapon-count-scaled cooldown jitter.
         """
         return _safe(lambda **kw: answers.compare_weapons(
             ds, [tuple(x) for x in kw["names_with_tiers"]], kw["stats"],
-            kw["aoe_enemies_hit"], kw["character"], kw["weapon_count"]))(
+            kw["aoe_enemies_hit"], kw["character"], kw["weapon_count"],
+            kw["engagement_distance"], kw["loadout"], kw["apply_set_bonuses"]))(
             names_with_tiers=names_with_tiers, stats=stats.as_dict(),
             aoe_enemies_hit=aoe_enemies_hit, character=character,
-            weapon_count=weapon_count)
+            weapon_count=weapon_count, engagement_distance=engagement_distance,
+            loadout=loadout, apply_set_bonuses=apply_set_bonuses)
 
     @mcp.tool()
     def compare_merge_paths(weapon_name: str, path_a: list[int],
-                            path_b: list[int]) -> dict[str, Any]:
+                            path_b: list[int],
+                            stats: Stats | None = None) -> dict[str, Any]:
         """Compare two tier-merge paths for the SAME weapon across the
-        ranged-damage range.
+        ranged-damage range, at an otherwise-fixed stat block.
 
         Answers the Brotato 'which merge order is better' question. `path_a` and
-        `path_b` are lists of tiers (ints), e.g. [1, 1, 2] vs [1, 2, 2]. Returns
-        the winner if one path dominates at all RD, or the crossover ranged-damage
-        value where the better path flips. Path lines include expected proc DPS
-        (at the default single-enemy AoE assumption; aoe_enemies_hit is not
-        tunable here).
+        `path_b` are lists of tiers (ints), e.g. [1, 1, 2] vs [1, 2, 2]. `stats`
+        (optional, DISPLAYED values — see weapon_dps) holds every OTHER stat
+        fixed while ranged_damage is swept across the range; omit it to use
+        an all-zero baseline. Returns the winner if one path dominates at all
+        RD, or `crossover_rd` — the FIRST INTEGER ranged-damage value where the
+        better path flips. Game-exact DPS is a step function of RD (integer
+        arithmetic), so this crossover is a step, not an algebraic
+        intersection. Path lines include expected proc DPS (at the default
+        single-enemy AoE assumption; aoe_enemies_hit is not tunable here).
         """
         return _safe(answers.compare_merge_paths)(
-            ds=ds, weapon_name=weapon_name, path_a=path_a, path_b=path_b)
+            ds=ds, weapon_name=weapon_name, path_a=path_a, path_b=path_b,
+            stats=stats.as_dict() if stats else None)
+
+    @mcp.tool()
+    def stat_gradient(weapons: list[tuple[str, int]], stats: Stats,
+                      step: float = 10.0, character: str | None = None,
+                      aoe_enemies_hit: float = 1.0,
+                      engagement_distance: float | None = None) -> dict[str, Any]:
+        """Rank stats by how much +`step` of each would raise the loadout's
+        total DPS — 'which stat should I buy next'. `weapons` is [name, tier]
+        pairs for the CURRENT loadout; `stats` the current DISPLAYED stats
+        (pass `character` to convert raw values). Candidates are the loadout's
+        scaling stats plus %damage / attack speed / crit chance. Default
+        step=10 is shop-scale; the game's integer damage arithmetic makes ±1
+        deltas unrepresentative. crit rows carry `saturated: true` when crit
+        chance is already at certainty. Survivability stats are out of scope —
+        this is a DPS gradient only.
+        """
+        return _safe(lambda **kw: answers.stat_gradient(
+            ds, [tuple(x) for x in kw["weapons"]], kw["stats"], kw["step"],
+            kw["character"], kw["aoe_enemies_hit"], kw["engagement_distance"]))(
+            weapons=weapons, stats=stats.as_dict(), step=step,
+            character=character, aoe_enemies_hit=aoe_enemies_hit,
+            engagement_distance=engagement_distance)
 
     @mcp.tool()
     def explain_stat(stat: str) -> dict[str, Any]:

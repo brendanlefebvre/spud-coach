@@ -23,8 +23,9 @@ def test_primer_contains_required_sentinels():
         # every classification category, by exact name
         "stat_rider", "dynamic", "economy", "cc", "delivery_modifier",
         "drawback", "execute", "stack", "structure",
-        # dataset-convention vocabulary
-        "dps_at_zero_rd", "dps_slope_per_rd", "zero-stat", "cycle_time",
+        # dataset-convention vocabulary (stat-aware engine)
+        "base_dps", "proc_dps", "assumptions", "engagement_distance",
+        "stat_gradient", "cycle_time",
         "classified_effects", "unmodeled_effects", "enemies_hit",
         # exploding-proc rider stats: both named, with the manual formula
         # for explosion_damage so callers compute instead of giving up
@@ -72,6 +73,16 @@ def test_primer_describes_verified_cadence_not_unmodeled_sync():
     assert "randomizes each shot's cooldown" in primer
     # The old misleading blanket claim is gone.
     assert "Attack-timing synchronization is NOT modeled" not in primer
+
+
+def test_primer_caveats_burn_uptime_gating():
+    primer = orientation.read_me_payload(FAKE_DS)["primer"]
+    # Burn steady-state eligibility is decided at BUILD time from zero-AS
+    # cycle time; runtime attack speed never re-gates it, so callers must
+    # know the two directions the static line can be wrong.
+    assert "zero-attack-speed" in primer
+    assert "overstates burn uptime" in primer
+    assert "chance < 100%" in primer
 
 
 def test_read_me_appears_in_nuance():

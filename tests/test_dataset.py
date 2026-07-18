@@ -15,11 +15,11 @@ def test_mechanics_known_facts():
 
 def test_assemble_and_validate_ok():
     weapon = {
-        "id": "w", "name": "W", "tier": 4, "base_damage": 25, "cooldown": 45,
+        "id": "w", "name": "W", "tier": 4, "weapon_type": "ranged",
+        "base_damage": 25, "cooldown": 45,
         "accuracy": 1.0, "crit_chance": 0.03, "crit_damage": 2.0, "piercing": 3,
         "nb_projectiles": 1, "scaling_stats": [], "can_have_negative_knockback": False,
-        "base_knockback": 0, "cycle_time": 1.05, "dps_at_zero_rd": 23.8,
-        "dps_slope_per_rd": 0.48, "sets": [], "effects": [],
+        "base_knockback": 0, "sets": [], "effects": [],
     }
     item = {"id": "i", "name": "I", "tier": 0, "value": 10, "tags": [], "effects": [],
             "archetype": [], "frozen_stat": None, "scaling_stats": [], "damage_tags": []}
@@ -61,8 +61,32 @@ def _minimal(**over):
     return dataset.assemble_dataset(**base)
 
 
-def test_schema_version_is_5():
-    assert _minimal()["schema_version"] == 5
+def test_schema_version_is_6():
+    assert _minimal()["schema_version"] == 6
+
+
+def test_validate_flags_missing_weapon_type():
+    ds = _minimal(weapons=[{"id": "w", "name": "W", "tier": 1}])  # no weapon_type
+    problems = dataset.validate_dataset(ds)
+    assert any("weapon_type" in p for p in problems)
+
+
+def test_validate_flags_missing_calculation_fields():
+    # base_damage and cooldown feed the DPS engine directly; a weapon without
+    # them would crash calc at query time, so the validator must reject it.
+    ds = _minimal(weapons=[{"id": "w", "name": "W", "tier": 1,
+                            "weapon_type": "ranged"}])
+    problems = dataset.validate_dataset(ds)
+    assert any("base_damage" in p for p in problems)
+    assert any("cooldown" in p for p in problems)
+
+
+def test_validate_flags_unknown_weapon_type():
+    ds = _minimal(weapons=[{"id": "w", "name": "W", "tier": 1,
+                            "weapon_type": "gun",
+                            "base_damage": 5, "cooldown": 60}])
+    problems = dataset.validate_dataset(ds)
+    assert any("weapon_type" in p for p in problems)
 
 
 def test_enemies_and_waves_present_in_output():

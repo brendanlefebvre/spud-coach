@@ -1,21 +1,14 @@
 """Pure DPS / merge math. No I/O — every function is unit-testable in isolation.
 
-DPS model: cycle_time = recoil_duration*2 + cooldown/60 (seconds).
-Realized DPS as a function of ranged-damage (RD) is a line:
-    dps(rd) = dps_at_zero_rd + dps_slope_per_rd * rd
-with both intercept and slope scaled by accuracy.
+Game-exact DPS is computed per-stat-block by weapon_dps_profile() (below);
+see docs/dps-engine.md. There is no closed-form line in ranged-damage (RD)
+— callers that need DPS across an RD range (e.g. answers.compare_merge_paths)
+sweep integer RD values and re-run the full profile at each point.
 """
 
 from __future__ import annotations
 
-
-def cycle_time(recoil_duration: float, cooldown: float,
-               burst: tuple[int, float] | None = None) -> float:
-    ct = recoil_duration * 2 + cooldown / 60
-    if burst is not None:
-        every_x_shots, multiplier = burst
-        ct += (cooldown * multiplier / 60) / every_x_shots
-    return ct
+import math
 
 
 def cooldown_jitter(cooldown_basis_frames: float, weapon_count: int) -> tuple[float, float]:
@@ -71,84 +64,214 @@ def cadence_profile(cycle_time: float, total_dps: float,
     }
 
 
-def dps_line(base_damage: float, scaling_coef: float, cycle_time: float,
-             accuracy: float) -> tuple[float, float]:
-    dps0 = base_damage / cycle_time * accuracy
-    slope = scaling_coef / cycle_time * accuracy
-    return (dps0, slope)
+# --- Stat-aware game-exact engine -------------------------------------------
+# Evidence: recovered/singletons/weapon_service.gd (init pipeline),
+# recovered/weapons/shooting_behaviors/*.gd (timing), recovered/entities/
+# units/unit/unit.gd:285-301 (crit roll). See docs/dps-engine.md.
+
+GD_MIN_COOLDOWN = 2.0  # frames; weapon_service.gd:5
 
 
-def dps_at(dps0: float, slope: float, rd: float) -> float:
-    return dps0 + slope * rd
+def game_round(x: float) -> int:
+    """GDScript round(): half away from zero (round(32.5) == 33)."""
+    return math.floor(x + 0.5) if x >= 0 else math.ceil(x - 0.5)  # type: ignore[return-value]
 
 
-def sum_lines(lines: list[tuple[float, float]]) -> tuple[float, float]:
-    return (sum(d for d, _ in lines), sum(s for _, s in lines))
+def game_int(x: float) -> int:
+    """GDScript `as int`: truncation toward zero."""
+    return math.trunc(x)  # type: ignore[return-value]
 
 
-def proc_line(dps0: float, slope: float, chance: float, enemies_hit: float,
-              multiplier: float = 1.0) -> tuple[float, float]:
-    """Expected DPS line added by a weapon-damage proc (e.g. exploding shot).
+def effective_cooldown(cooldown: float, attack_speed_frac: float) -> int:
+    """Attack-speed-adjusted cooldown in frames, exactly as the game computes it.
 
-    The proc re-deals the weapon's own damage line with probability `chance`
-    per hit, against `enemies_hit` enemies, scaled by `multiplier`. Expected
-    value is linear in RD, so the contribution is itself a (dps0, slope) line.
+    weapon_service.gd:227-229 floors the base cooldown at MIN_COOLDOWN first,
+    then :570-573 divides by (1+AS) for positive AS or multiplies by (1+|AS|)
+    for negative AS, floors at MIN_COOLDOWN again, and truncates to int.
+    `attack_speed_frac` is (stat_attack_speed + attack_speed_mod)/100.
     """
-    f = chance * enemies_hit * multiplier
-    return (dps0 * f, slope * f)
+    cd = max(cooldown, GD_MIN_COOLDOWN)
+    if attack_speed_frac > 0:
+        return game_int(max(GD_MIN_COOLDOWN, cd / (1 + attack_speed_frac)))
+    if attack_speed_frac < 0:
+        return game_int(max(GD_MIN_COOLDOWN, cd * (1 + abs(attack_speed_frac))))
+    return game_int(cd)
 
 
-def burn_dps_line(damage_per_tick: float, tick_interval: float = 0.5) -> tuple[float, float]:
-    """Expected DPS line from a sustained burn (damage-over-time) proc.
+DEFAULT_ENGAGEMENT_DISTANCE = 70.0  # units; melee assumption constant (see spec)
+MELEE_BASE_ATK_DURATION = 0.2      # melee_shooting_data.gd:4
 
-    Assumes steady-state: once ignited, the burn is kept continuously
-    refreshed by the weapon's own attacks (verified true for every shipped
-    burn weapon — see docs/proc-mechanics.md). Burn damage scales off
-    stat_elemental_damage, not RD, so slope is always 0 in this dataset's
-    RD-parameterized model.
+
+def stat_aware_cycle_time(*, weapon_type: str, recoil_duration: float,
+                          cooldown: float, attack_speed_frac: float,
+                          max_range: float = 0.0,
+                          engagement_distance: float | None = None,
+                          burst: tuple[int, float] | None = None) -> float:
+    """Seconds per attack cycle at a given attack speed, game-exact.
+
+    The engine ticks cooldown only while not mid-swing (weapon.gd:193), so
+    cycle = shooting_total_duration + effective_cooldown/60.
+    Ranged shooting = 2*recoil_duration' (ranged_shooting_data.gd:10-15).
+    Melee shooting = atk_duration/2 + back_duration + recoil_duration'
+    (melee_shooting_data.gd:31-32) where atk/back have their own AS terms and
+    atk_duration grows with distance-to-target (range_factor). The default
+    engagement distance min(max_range, 70) is an assumption constant — enemies
+    close in, and a weapon is never credited beyond its own reach.
+    Positive AS divides recoil_duration (weapon_service.gd:230-232); negative
+    AS does NOT lengthen it. Burst reload (Revolver/Chain Gun): every
+    `every`-th cooldown draw is cd*multiplier INSTEAD of cd (weapon.gd:337-339),
+    so the amortized cooldown is cd*((every-1)+multiplier)/every.
     """
-    return (damage_per_tick / tick_interval, 0.0)
+    asf = attack_speed_frac
+    recoil = recoil_duration / (1 + asf) if asf > 0 else recoil_duration
+    cd = float(effective_cooldown(cooldown, asf))
+    if burst is not None:
+        every_x_shots, multiplier = burst
+        cd = cd * ((every_x_shots - 1) + multiplier) / every_x_shots
+
+    if weapon_type == "melee":
+        dist = min(max_range, DEFAULT_ENGAGEMENT_DISTANCE) \
+            if engagement_distance is None else engagement_distance
+        # melee_shooting_data.gd:23-28
+        range_factor = max(0.0, dist / min(max(70.0 * (1 + asf / 3), 70.0), 120.0))
+        atk_duration = max(0.01, MELEE_BASE_ATK_DURATION - asf / 10) + range_factor * 0.15
+        back_duration = MELEE_BASE_ATK_DURATION / (1 + 3 * asf) if asf > 0 \
+            else MELEE_BASE_ATK_DURATION
+        shooting = atk_duration / 2 + back_duration + recoil
+    else:
+        shooting = 2 * recoil
+
+    return shooting + cd / 60
 
 
-def companion_dps_line(damage: float, rd_coef: float, host_cycle_time: float,
-                       count: float, enemies_hit: float) -> tuple[float, float]:
-    """Expected DPS line from a spawn-projectiles-on-hit proc.
+# Scaling-stat names are the full stat_* identifiers from the .tres; the
+# coach's stat blocks use short names (Stats schema). One irregular case:
+# the game's stat_percent_damage displays as "% Damage" and the schema calls
+# it `damage`.
+_SHORT_BY_STAT_NAME = {"stat_percent_damage": "damage"}
 
-    Each landed host hit unconditionally spawns `count` projectiles whose
-    damage line lives on a companion RangedWeaponStats resource, independent
-    of the host weapon's own damage (see docs/proc-mechanics.md,
-    "Companion-projectile procs"). `enemies_hit` is the assumed expected hits
-    per volley/chain — an assumption constant, like proc_line's enemies_hit.
+
+def stat_value(stats: dict, stat_name: str, level: float = 0.0) -> float:
+    """Player-stat value for a full `stat_*` scaling name (0.0 if absent).
+
+    `stat_levels` scales with player level, not a stat
+    (weapon_service.gd:473-474).
     """
-    f = count * enemies_hit / host_cycle_time
-    return (damage * f, rd_coef * f)
+    if stat_name == "stat_levels":
+        return float(level)
+    short = _SHORT_BY_STAT_NAME.get(stat_name, stat_name.removeprefix("stat_"))
+    return float(stats.get(short, 0.0))
 
 
-def compare_lines(line_a: tuple[float, float], line_b: tuple[float, float],
-                  rd_min: float = 0.0, rd_max: float = 100.0) -> dict:
-    a0, as_ = line_a
-    b0, bs = line_b
+def per_hit_damage(base_damage: float, scaling_stats: list, stats: dict, *,
+                   level: float = 0.0, set_bonus_pct: float = 0.0) -> int:
+    """One landed hit's damage before crit, game-exact.
 
-    crossover_rd = None
-    if as_ != bs:
-        x = (b0 - a0) / (as_ - bs)
-        if rd_min < x < rd_max:
-            crossover_rd = x
+    Step A (weapon_service.gd:489,469): d1 = max(1, base + Σ stat_i*coef_i)
+    truncated to int. Step B (:239-249): d2 = max(1, round(d1 * (set_bonus
+    + 1 + %damage/100))) — GDScript round, half away from zero.
+    `set_bonus_pct` is the weapon-class-bonus percent bucket; the coach passes
+    0 (character class bonuses are advisory — see spec decision 7).
+    """
+    total = sum(stat_value(stats, entry[0], level) * float(entry[1])
+                for entry in scaling_stats or [])
+    d1 = game_int(max(1.0, base_damage + total))
+    bracket = set_bonus_pct / 100 + 1 + stat_value(stats, "stat_percent_damage") / 100
+    return game_int(max(1, game_round(d1 * bracket)))
 
-    def winner_at(rd: float) -> str:
-        va, vb = dps_at(a0, as_, rd), dps_at(b0, bs, rd)
-        if abs(va - vb) < 1e-9:
-            return "tie"
-        return "a" if va > vb else "b"
 
-    if crossover_rd is None:
-        return {
-            "winner": winner_at((rd_min + rd_max) / 2),
-            "rd_independent": True,
-            "crossover_rd": None,
-        }
+def expected_hit_damage(per_hit: int, weapon_crit_chance: float,
+                        crit_damage: float, player_crit_chance: float = 0.0) -> float:
+    """Expected damage of one landed hit, folding crit as an expectation.
+
+    Total crit chance = weapon base + player stat/100 (weapon_service.gd:253),
+    clamped to [0, 1] (cap defaults to LARGE_NUMBER, player_run_data.gd:436 —
+    effectively uncapped, but a chance saturates at certainty). A crit deals
+    round(damage * crit_damage) (unit.gd:299-300).
+    """
+    cc = min(1.0, max(0.0, weapon_crit_chance + player_crit_chance / 100))
+    return (1 - cc) * per_hit + cc * game_round(per_hit * crit_damage)
+
+
+def weapon_dps_profile(rec: dict, stats: dict, *, level: float = 0.0,
+                       aoe_enemies_hit: float = 1.0,
+                       engagement_distance: float | None = None) -> dict:
+    """Realized expected DPS of one weapon record at a full stat block.
+
+    Direct line: expected_hit_damage * accuracy / cycle_time. Proc lines from
+    `proc_effects` re-run the same pipeline (weapon_damage re-deals the
+    weapon's own hit; burn ticks run scaling+%damage without crit; companion
+    projectiles carry their own damage/scaling/crit). `aoe_enemies_hit`
+    multiplies proc enemies-hit assumptions, as before.
+
+    Companion damage pipeline verified against
+    recovered/effects/weapons/projectiles_on_hit_effect.gd (calls
+    WeaponService.init_ranged_stats(weapon_stats, player_index, is_special_spawn=true))
+    and recovered/singletons/weapon_service.gd:init_base_stats: damage scaling
+    (:237) and %damage bonus (:239,249) apply unconditionally, and player crit
+    chance is added (:252-253, gated only on `not is_structure` — companions are
+    not structures) — the full pipeline the brief assumed, so no fallback needed.
+    """
+    asf = (stat_value(stats, "stat_attack_speed")
+           + float(rec.get("attack_speed_mod", 0.0))) / 100
+    burst = None
+    every = rec.get("additional_cooldown_every_x_shots", -1)
+    mult = rec.get("additional_cooldown_multiplier", -1.0)
+    if isinstance(every, int) and every > 0 and mult and mult > 0:
+        burst = (every, float(mult))
+    is_melee = rec.get("weapon_type") == "melee"
+    dist_used = (min(float(rec.get("max_range", 0.0)), DEFAULT_ENGAGEMENT_DISTANCE)
+                 if engagement_distance is None else engagement_distance) if is_melee else None
+    ct = stat_aware_cycle_time(
+        weapon_type=rec.get("weapon_type", "ranged"),
+        recoil_duration=float(rec.get("recoil_duration", 0.0)),
+        cooldown=float(rec.get("cooldown", 0.0)),
+        attack_speed_frac=asf,
+        max_range=float(rec.get("max_range", 0.0)),
+        engagement_distance=dist_used if is_melee else None,
+        burst=burst)
+
+    hit = per_hit_damage(float(rec["base_damage"]), rec.get("scaling_stats") or [],
+                         stats, level=level)
+    cc_total = min(1.0, max(0.0, float(rec.get("crit_chance", 0.0))
+                            + stat_value(stats, "stat_crit_chance") / 100))
+    expected = expected_hit_damage(hit, float(rec.get("crit_chance", 0.0)),
+                                   float(rec.get("crit_damage", 0.0)),
+                                   stat_value(stats, "stat_crit_chance"))
+    accuracy = float(rec.get("accuracy", 1.0))
+    base_dps = expected * accuracy / ct if ct > 0 else 0.0
+
+    proc_dps = 0.0
+    for eff in rec.get("proc_effects") or []:
+        kind = eff.get("kind")
+        if kind == "weapon_damage":
+            proc_dps += (base_dps * float(eff["chance"])
+                         * float(eff["enemies_hit"]) * aoe_enemies_hit
+                         * float(eff.get("multiplier", 1.0)))
+        elif kind == "burn_dot":
+            tick = per_hit_damage(float(eff["damage"]),
+                                  eff.get("scaling_stats") or [], stats, level=level)
+            proc_dps += tick / float(eff["tick_interval"])
+        elif kind == "companion":
+            c_hit = per_hit_damage(float(eff["damage"]),
+                                   eff.get("scaling_stats") or [], stats, level=level)
+            c_expected = expected_hit_damage(
+                c_hit, float(eff.get("crit_chance", 0.0)),
+                float(eff.get("crit_damage", 0.0)),
+                stat_value(stats, "stat_crit_chance"))
+            proc_dps += (c_expected * float(eff["count"])
+                         * float(eff["enemies_hit"]) * aoe_enemies_hit
+                         / ct * accuracy) if ct > 0 else 0.0
+
     return {
-        "winner": None,
-        "rd_independent": False,
-        "crossover_rd": crossover_rd,
+        "dps": base_dps + proc_dps,
+        "base_dps": base_dps,
+        "proc_dps": proc_dps,
+        "cycle_time": ct,
+        "per_hit_damage": hit,
+        "expected_hit_damage": expected,
+        "crit_chance_total": cc_total,
+        "effective_cooldown_frames": effective_cooldown(
+            float(rec.get("cooldown", 0.0)), asf),
+        "engagement_distance_used": dist_used,
     }

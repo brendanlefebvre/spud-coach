@@ -3,7 +3,7 @@ import json
 import pytest
 
 from brotato_coach.runfile import (
-    RunFormatError, godot_string_hash, load_run, parse_run)
+    RunFormatError, _STAT_KEY_BY_SHORT, godot_string_hash, load_run, parse_run)
 
 
 # Hash constants below are hand-verified against a real Brotato save's
@@ -21,6 +21,14 @@ def test_godot_string_hash_matches_known_stat_hashes():
     assert godot_string_hash("stat_range") == _H["stat_range"]
     assert godot_string_hash("stat_max_hp") == _H["stat_max_hp"]
     assert godot_string_hash("stat_armor") == _H["stat_armor"]
+
+
+def test_percent_damage_uses_real_stat_key():
+    assert _STAT_KEY_BY_SHORT["damage"] == str(godot_string_hash("stat_percent_damage"))
+
+
+def test_level_is_not_an_effects_stat():
+    assert "level" not in _STAT_KEY_BY_SHORT
 
 
 def _sample_run() -> dict:
@@ -93,7 +101,20 @@ def test_parse_run_recovers_realized_stats_by_hash():
         "range": 80,
         "max_hp": 13,
         "armor": 2,
+        "level": 3,
     }
+
+
+def test_parse_run_includes_player_level_in_stats():
+    # current_level lives on the player dict, not in effects; stat_levels
+    # scaling weapons need it in the stats block
+    assert parse_run(_sample_run())["stats"]["level"] == 3
+
+
+def test_parse_run_omits_level_when_save_lacks_it():
+    run = _sample_run()
+    del run["current_run_state"]["players_data"][0]["current_level"]
+    assert "level" not in parse_run(run)["stats"]
 
 
 def test_parse_run_rejects_unrecognized_structure():
