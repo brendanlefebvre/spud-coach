@@ -37,7 +37,10 @@ _ACCOUNTED_ZONE_SUBDIRS = frozenset({
 def _immediate_subdirs(path: str) -> set[str]:
     if not os.path.isdir(path):
         return set()
-    return {n for n in os.listdir(path) if os.path.isdir(os.path.join(path, n))}
+    # Dot-prefixed dirs (Godot's `.import` cache, `.godot`, etc.) are tooling
+    # artifacts, never Brotato content, in any of the three trees this scans.
+    return {n for n in os.listdir(path)
+            if not n.startswith(".") and os.path.isdir(os.path.join(path, n))}
 
 
 def coverage_report(extracted_root: str) -> dict[str, list[str]]:
