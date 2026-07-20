@@ -29,6 +29,7 @@ from brotato_coach.builders.waves import build_wave_record
 from brotato_coach.builders.localization import parse_translations_csv
 from brotato_coach.builders.version import parse_game_version
 from brotato_coach.builders.timestamps import format_generated_at
+from brotato_coach.builders.provenance import detect_source
 from brotato_coach.tres import parse_tres
 
 
@@ -50,6 +51,15 @@ def resolve_recovered_paths(recovered: str, version_file: str | None,
         translations or os.path.join(recovered, ".assets", "resources",
                                      "translations", "translations.csv"),
     )
+
+
+def _stamp_sources(*record_lists) -> None:
+    """Tag every built record with its content origin. Today detect_source
+    returns "base" for all; on DLC day it learns the real signal (see
+    provenance.py) and this stamps records without further plumbing changes."""
+    for records in record_lists:
+        for rec in records:
+            rec["source"] = detect_source(record=rec)
 
 
 def main(argv=None) -> int:
@@ -164,6 +174,8 @@ def main(argv=None) -> int:
     # appears_in: "normal" for any enemy referenced by a numbered wave
     for e in enemies:
         e["appears_in"] = ["normal"] if e["id"] in enemy_ids_in_waves else []
+
+    _stamp_sources(weapons, items, characters, sets, enemies, zone_1_waves)
 
     ds = dataset.assemble_dataset(
         game_version=game_version, generated_at=generated_at,

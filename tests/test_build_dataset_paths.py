@@ -24,3 +24,12 @@ def test_default_recovered_root_matches_old_defaults():
     assert version_file == os.path.join("recovered", "singletons", "progress_data.gd")
     assert translations == os.path.join(
         "recovered", ".assets", "resources", "translations", "translations.csv")
+
+
+def test_stamp_sources_sets_base_on_every_record():
+    import build_dataset
+    weapons = [{"id": "w1"}, {"id": "w2"}]
+    enemies = [{"id": "e1"}]
+    build_dataset._stamp_sources(weapons, enemies, [])
+    assert all(r["source"] == "base" for r in weapons)
+    assert enemies[0]["source"] == "base"
