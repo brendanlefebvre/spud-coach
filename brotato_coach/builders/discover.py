@@ -26,9 +26,13 @@ _ACCOUNTED_TOP_LEVEL = frozenset({
 _ACCOUNTED_WEAPON_SUBDIRS = frozenset({
     "melee", "ranged", "melee_sounds", "shooting_behaviors", "weapon_stats",
 })
-# zone_1 is modeled; zone_2/zone_3 are present-but-unmodeled (roadmap-tracked);
-# backgrounds/common are non-wave assets. All accounted for, so the base build
-# stays clean and only a genuinely new zone surfaces.
+# zone_1 (ZONE_CRASH_ZONE, unlocked_by_default=true, ~336 .tres) is the modeled
+# base zone. zone_2 (ZONE_LAKE) and zone_3 (ZONE_VOLCANIC_GROUNDS) ship in the
+# base 1.1.15.4 PCK as inert stubs — 5 .tres each, unlocked_by_default=false, a
+# single placeholder wave — i.e. pre-staged Abyssal Terrors DLC zones, disabled.
+# They are accounted for so the base build stays clean; installing the DLC fills
+# them in (a modeling task, not a coverage drop). backgrounds/common are non-wave
+# assets. Only a genuinely NEW zone dir surfaces here.
 _ACCOUNTED_ZONE_SUBDIRS = frozenset({
     "zone_1", "zone_2", "zone_3", "backgrounds", "common",
 })
